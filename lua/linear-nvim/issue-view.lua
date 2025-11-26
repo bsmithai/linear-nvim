@@ -79,9 +79,47 @@ function M.show_issue_in_buffer(issue, options)
         table.insert(highlights, {line = #lines - 1, col_start = 2, col_end = 13, hl_group = "Special"})
         table.insert(lines, "")
         
-        -- Split description by newlines and indent
+        -- Parse and render markdown
         for desc_line in issue.description:gmatch("[^\r\n]+") do
-            table.insert(lines, "    " .. desc_line)
+            local line_start = #lines
+            local indented_line = "    " .. desc_line
+            table.insert(lines, indented_line)
+            
+            -- Highlight markdown headers (###, ##, #)
+            if desc_line:match("^###%s") then
+                table.insert(highlights, {line = line_start, col_start = 4, col_end = 7, hl_group = "Special"})
+                table.insert(highlights, {line = line_start, col_start = 8, col_end = #indented_line, hl_group = "Title"})
+            elseif desc_line:match("^##%s") then
+                table.insert(highlights, {line = line_start, col_start = 4, col_end = 6, hl_group = "Special"})
+                table.insert(highlights, {line = line_start, col_start = 7, col_end = #indented_line, hl_group = "Title"})
+            elseif desc_line:match("^#%s") then
+                table.insert(highlights, {line = line_start, col_start = 4, col_end = 5, hl_group = "Special"})
+                table.insert(highlights, {line = line_start, col_start = 6, col_end = #indented_line, hl_group = "Title"})
+            end
+            
+            -- Highlight bullet points (*, -)
+            if desc_line:match("^%s*[%*%-]%s") then
+                local bullet_pos = desc_line:find("[%*%-]")
+                if bullet_pos then
+                    table.insert(highlights, {line = line_start, col_start = 4 + bullet_pos - 1, col_end = 4 + bullet_pos, hl_group = "Special"})
+                end
+            end
+            
+            -- Highlight bold (**text**)
+            for bold_text in desc_line:gmatch("%*%*(.-)%*%*") do
+                local start_pos = desc_line:find("%*%*" .. bold_text:gsub("[%^%$%(%)%%%.%[%]%*%+%-%?]", "%%%1") .. "%*%*")
+                if start_pos then
+                    table.insert(highlights, {line = line_start, col_start = 4 + start_pos - 1, col_end = 4 + start_pos + #bold_text + 3, hl_group = "Bold"})
+                end
+            end
+            
+            -- Highlight code blocks (`code`)
+            for code_text in desc_line:gmatch("`([^`]+)`") do
+                local start_pos = desc_line:find("`" .. code_text:gsub("[%^%$%(%)%%%.%[%]%*%+%-%?]", "%%%1") .. "`")
+                if start_pos then
+                    table.insert(highlights, {line = line_start, col_start = 4 + start_pos - 1, col_end = 4 + start_pos + #code_text + 1, hl_group = "String"})
+                end
+            end
         end
         
         table.insert(lines, "")
