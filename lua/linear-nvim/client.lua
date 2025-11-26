@@ -38,6 +38,12 @@ LinearClient._make_query = function(api_key, query)
         return nil
     end
 
+    local body_type = type(resp.body)
+    if body_type ~= "string" then
+        log.error(string.format("Response body is %s, not string. Body: %s", body_type, vim.inspect(resp.body)))
+        return nil
+    end
+
     local data = vim.json.decode(resp.body)
     return data
 end
