@@ -242,6 +242,9 @@ function M.show_issue_in_buffer(issue, options)
     -- Set window options
     vim.api.nvim_win_set_option(win, 'cursorline', true)
     vim.api.nvim_win_set_option(win, 'wrap', true)
+    vim.api.nvim_win_set_option(win, 'breakindent', true)
+    vim.api.nvim_win_set_option(win, 'breakindentopt', 'shift:0')
+    vim.api.nvim_win_set_option(win, 'linebreak', true)
     
     -- Set up keymaps
     local function close_window()
