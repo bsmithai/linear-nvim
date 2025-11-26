@@ -56,8 +56,12 @@ LinearClient._make_query = function(api_key, query)
         return nil
     end
     
-    print(string.format("[DEBUG] Returning data of type: %s", type(data)))
-    print(string.format("[DEBUG] Response body preview: %s", resp.body:sub(1, 500)))
+    if data.errors then
+        log.error(string.format("GraphQL errors: %s", vim.inspect(data.errors)))
+        vim.notify("Linear API error: " .. (data.errors[1].message or "Unknown error"), vim.log.levels.ERROR)
+        return nil
+    end
+    
     return data
 end
 
@@ -243,6 +247,43 @@ function LinearClient:get_teams()
     return teams
 end
 
+--- @param team_id string
+--- @param label_names string[]
+--- @return string[]
+function LinearClient:get_label_ids_by_names(team_id, label_names)
+    if #label_names == 0 then
+        return {}
+    end
+    
+    local query = string.format(
+        '{"query":"query { issueLabels(filter: { team: { id: { eq: \\"%s\\" }}}) { nodes { id name }}}"}',
+        team_id
+    )
+    
+    local data = self._make_query(self:fetch_api_key(), query)
+    
+    if not data or not data.data or not data.data.issueLabels or not data.data.issueLabels.nodes then
+        log.error("Failed to fetch labels")
+        return {}
+    end
+    
+    local label_map = {}
+    for _, label in ipairs(data.data.issueLabels.nodes) do
+        label_map[label.name] = label.id
+    end
+    
+    local label_ids = {}
+    for _, name in ipairs(label_names) do
+        if label_map[name] then
+            table.insert(label_ids, label_map[name])
+        else
+            log.warn(string.format("Label '%s' not found in team", name))
+        end
+    end
+    
+    return label_ids
+end
+
 --- @param labels string[]
 --- @return string
 local function convertDefaultLabelsToGQLArray(labels)
@@ -259,8 +300,6 @@ end
 function LinearClient:create_issue(title, description, callback)
     local parsed_title = utils.escape_json_string(title)
     local issue_fields_query = table.concat(self._issue_fields, " ")
-    local labels_to_attach =
-        convertDefaultLabelsToGQLArray(self._default_labels)
     local user_id = self:get_user_id()
 
     if not user_id then
@@ -275,6 +314,9 @@ function LinearClient:create_issue(title, description, callback)
             callback(nil)
             return
         end
+
+        local label_ids = self:get_label_ids_by_names(team_id, self._default_labels)
+        local labels_to_attach = convertDefaultLabelsToGQLArray(label_ids)
 
         local query = string.format(
             '{"query": "mutation IssueCreate { issueCreate(input: {title: \\"%s\\" teamId: \\"%s\\" assigneeId: \\"%s\\" labelIds: %s}) { success issue { %s } } }"}',
