@@ -157,7 +157,11 @@ function M.show_issue_in_buffer(issue, options)
         local win_height = vim.api.nvim_get_option("lines")
         
         local width = math.min(100, math.floor(win_width * 0.8))
-        local height = math.min(40, math.floor(win_height * 0.8))
+        
+        -- Calculate height based on content, with max limits
+        local content_height = #lines
+        local max_height = math.floor(win_height * 0.8)
+        local height = math.min(content_height + 2, max_height) -- +2 for border
         
         local row = math.floor((win_height - height) / 2)
         local col = math.floor((win_width - width) / 2)
