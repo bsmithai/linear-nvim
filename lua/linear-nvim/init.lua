@@ -134,12 +134,12 @@ function M.show_assigned_issues()
     show_issues_picker(issue_titles)
 end
 
---- @param team_id string
+--- @param team_id string?
 --- @param callback function(label_ids: string[])
 local function show_label_picker(team_id, callback)
-    local labels = M.client:get_labels(team_id)
+    local labels = M.client:get_labels(nil)  -- Pass nil to get all labels
     if not labels or #labels == 0 then
-        vim.notify("No labels found for this team", vim.log.levels.WARN)
+        vim.notify("No labels found", vim.log.levels.WARN)
         callback({})
         return
     end

@@ -247,13 +247,19 @@ function LinearClient:get_teams()
     return teams
 end
 
---- @param team_id string
+--- @param team_id string?
 --- @return table?
 function LinearClient:get_labels(team_id)
-    local query = string.format(
-        '{"query":"query { issueLabels(filter: { team: { id: { eq: \\"%s\\" }}}) { nodes { id name color }}}"}',
-        team_id
-    )
+    local query
+    if team_id then
+        query = string.format(
+            '{"query":"query { issueLabels(filter: { team: { id: { eq: \\"%s\\" }}}) { nodes { id name color }}}"}',
+            team_id
+        )
+    else
+        -- Fetch all labels across all teams
+        query = '{"query":"query { issueLabels { nodes { id name color }}}"}'
+    end
     
     local data = self._make_query(self:fetch_api_key(), query)
     
