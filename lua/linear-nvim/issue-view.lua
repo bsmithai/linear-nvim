@@ -35,26 +35,26 @@ function M.show_issue_in_buffer(issue, options)
     table.insert(lines, "")
     
     -- Status
-    if issue.state and issue.state.name then
+    if issue.state and issue.state ~= vim.NIL and issue.state.name then
         table.insert(lines, "    Status:  " .. issue.state.name)
         table.insert(highlights, {line = #lines - 1, col_start = 4, col_end = 12, hl_group = "Label"})
     end
     
     -- Priority
-    if issue.priority then
+    if issue.priority and issue.priority ~= vim.NIL then
         local priority_text = tostring(issue.priority)
         table.insert(lines, "    Priority:  " .. priority_text)
         table.insert(highlights, {line = #lines - 1, col_start = 4, col_end = 14, hl_group = "Label"})
     end
     
     -- Assignee
-    if issue.assignee and issue.assignee.name then
+    if issue.assignee and issue.assignee ~= vim.NIL and issue.assignee.name then
         table.insert(lines, "    Assignee:  " .. issue.assignee.name)
         table.insert(highlights, {line = #lines - 1, col_start = 4, col_end = 14, hl_group = "Label"})
     end
     
     -- Labels
-    if issue.labels and issue.labels.nodes and #issue.labels.nodes > 0 then
+    if issue.labels and issue.labels ~= vim.NIL and issue.labels.nodes and #issue.labels.nodes > 0 then
         local label_names = {}
         for _, label in ipairs(issue.labels.nodes) do
             table.insert(label_names, label.name)
@@ -64,7 +64,7 @@ function M.show_issue_in_buffer(issue, options)
     end
     
     -- Project
-    if issue.project and issue.project.name then
+    if issue.project and issue.project ~= vim.NIL and type(issue.project) == "table" and issue.project.name then
         table.insert(lines, "    Project:  " .. issue.project.name)
         table.insert(highlights, {line = #lines - 1, col_start = 4, col_end = 13, hl_group = "Label"})
     end
