@@ -49,6 +49,13 @@ LinearClient._make_query = function(api_key, query)
         log.error(string.format("Failed to decode JSON: %s. Body: %s", data, resp.body))
         return nil
     end
+    
+    local data_type = type(data)
+    if data_type ~= "table" then
+        log.error(string.format("Decoded data is %s, not table. Data: %s", data_type, vim.inspect(data)))
+        return nil
+    end
+    
     return data
 end
 
