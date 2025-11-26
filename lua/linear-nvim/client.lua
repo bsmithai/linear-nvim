@@ -44,7 +44,11 @@ LinearClient._make_query = function(api_key, query)
         return nil
     end
 
-    local data = vim.json.decode(resp.body)
+    local ok, data = pcall(vim.json.decode, resp.body)
+    if not ok then
+        log.error(string.format("Failed to decode JSON: %s. Body: %s", data, resp.body))
+        return nil
+    end
     return data
 end
 
