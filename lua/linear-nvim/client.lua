@@ -24,6 +24,7 @@ LinearClient._make_query = function(api_key, query)
     local resp = curl.post(API_URL, {
         body = query,
         headers = headers,
+        decoded = true,
     })
 
     if resp.status ~= 200 then
