@@ -248,15 +248,10 @@ function LinearClient:get_teams()
 end
 
 --- @param team_id string
---- @param label_names string[]
---- @return string[]
-function LinearClient:get_label_ids_by_names(team_id, label_names)
-    if #label_names == 0 then
-        return {}
-    end
-    
+--- @return table?
+function LinearClient:get_labels(team_id)
     local query = string.format(
-        '{"query":"query { issueLabels(filter: { team: { id: { eq: \\"%s\\" }}}) { nodes { id name }}}"}',
+        '{"query":"query { issueLabels(filter: { team: { id: { eq: \\"%s\\" }}}) { nodes { id name color }}}"}',
         team_id
     )
     
@@ -264,11 +259,27 @@ function LinearClient:get_label_ids_by_names(team_id, label_names)
     
     if not data or not data.data or not data.data.issueLabels or not data.data.issueLabels.nodes then
         log.error("Failed to fetch labels")
+        return nil
+    end
+    
+    return data.data.issueLabels.nodes
+end
+
+--- @param team_id string
+--- @param label_names string[]
+--- @return string[]
+function LinearClient:get_label_ids_by_names(team_id, label_names)
+    if #label_names == 0 then
+        return {}
+    end
+    
+    local labels = self:get_labels(team_id)
+    if not labels then
         return {}
     end
     
     local label_map = {}
-    for _, label in ipairs(data.data.issueLabels.nodes) do
+    for _, label in ipairs(labels) do
         label_map[label.name] = label.id
     end
     
@@ -355,7 +366,7 @@ end
 function LinearClient:get_issue_details(issue_id)
     local issue_fields_query = table.concat(self._issue_fields, " ")
     local query = string.format(
-        '{"query":"query { issue(id: \\"%s\\") { %s }}"}',
+        '{"query":"query { issue(id: \\"%s\\") { %s labelIds }}"}',
         issue_id,
         issue_fields_query
     )
@@ -367,6 +378,59 @@ function LinearClient:get_issue_details(issue_id)
     else
         vim.notify("Issue not found in response", vim.log.levels.ERROR)
         return nil
+    end
+end
+
+--- @param issue_id string
+--- @param updates table
+--- @param callback function(issue: table?)
+function LinearClient:update_issue(issue_id, updates, callback)
+    local update_fields = {}
+    
+    if updates.title then
+        local parsed_title = utils.escape_json_string(updates.title)
+        table.insert(update_fields, string.format('title: \\"%s\\"', parsed_title))
+    end
+    
+    if updates.description then
+        local parsed_desc = utils.escape_json_string(updates.description)
+        table.insert(update_fields, string.format('description: \\"%s\\"', parsed_desc))
+    end
+    
+    if updates.labelIds then
+        local labels_array = convertDefaultLabelsToGQLArray(updates.labelIds)
+        table.insert(update_fields, string.format('labelIds: %s', labels_array))
+    end
+    
+    if #update_fields == 0 then
+        vim.notify("No updates provided", vim.log.levels.WARN)
+        callback(nil)
+        return
+    end
+    
+    local issue_fields_query = table.concat(self._issue_fields, " ")
+    local updates_string = table.concat(update_fields, " ")
+    
+    local query = string.format(
+        '{"query": "mutation IssueUpdate { issueUpdate(id: \\"%s\\" input: {%s}) { success issue { %s } } }"}',
+        issue_id,
+        updates_string,
+        issue_fields_query
+    )
+    
+    local data = self._make_query(self:fetch_api_key(), query)
+    
+    if
+        data
+        and data.data
+        and data.data.issueUpdate
+        and data.data.issueUpdate.success
+        and data.data.issueUpdate.issue
+    then
+        callback(data.data.issueUpdate.issue)
+    else
+        vim.notify("Failed to update issue", vim.log.levels.ERROR)
+        callback(nil)
     end
 end
 

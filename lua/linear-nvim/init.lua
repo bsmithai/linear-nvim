@@ -134,6 +134,35 @@ function M.show_assigned_issues()
     show_issues_picker(issue_titles)
 end
 
+--- @param team_id string
+--- @param callback function(label_ids: string[])
+local function show_label_picker(team_id, callback)
+    local labels = M.client:get_labels(team_id)
+    if not labels or #labels == 0 then
+        vim.notify("No labels found for this team", vim.log.levels.WARN)
+        callback({})
+        return
+    end
+    
+    local entries = {}
+    for _, label in ipairs(labels) do
+        table.insert(entries, {
+            value = label.id,
+            display = label.name,
+            ordinal = label.name,
+            label = label,
+        })
+    end
+    
+    utils.show_telescope_picker_multiselect(entries, "Select Labels", function(selected)
+        local label_ids = {}
+        for _, item in ipairs(selected) do
+            table.insert(label_ids, item.value)
+        end
+        callback(label_ids)
+    end)
+end
+
 function M.create_issue()
     local full_selection = utils.get_visual_selection()
     local title, description = full_selection:match("([^\n]*)\n(.*)")
@@ -167,6 +196,52 @@ function M.create_issue()
     end)
 end
 
+function M.create_issue_with_labels()
+    local full_selection = utils.get_visual_selection()
+    local title, description = full_selection:match("([^\n]*)\n(.*)")
+
+    if not title then
+        title = full_selection
+        description = ""
+    end
+    if title == "" then
+        title = vim.fn.input("Enter the title of the issue: ")
+    end
+    if title == "" then
+        log.warn("No title provided. Not creating an issue")
+        return
+    end
+    
+    M.client:fetch_team_id(function(team_id)
+        if not team_id then
+            vim.notify("Failed to get team ID", vim.log.levels.ERROR)
+            return
+        end
+        
+        show_label_picker(team_id, function(label_ids)
+            -- Temporarily override default labels with selected ones
+            local original_labels = M.client._default_labels
+            M.client._default_labels = label_ids
+            
+            M.client:create_issue(title, description, function(issue)
+                -- Restore original labels
+                M.client._default_labels = original_labels
+                
+                if issue ~= nil then
+                    vim.notify("Issue created successfully", vim.log.levels.INFO)
+                    if M.options.open_issue_browser then
+                        utils.open_in_browser_raw(issue.url)
+                    else
+                        show_create_issues_result_picker(issue, M.options.issue_fields)
+                    end
+                else
+                    vim.notify("Failed to create issue", vim.log.levels.ERROR)
+                end
+            end)
+        end)
+    end)
+end
+
 function M.show_issue_details()
     local issue_id = utils.get_current_word()
     if not M.options.issue_regex or M.options.issue_regex == "" then
@@ -184,6 +259,42 @@ function M.show_issue_details()
         return
     end
     show_create_issues_result_picker(issue, M.options.issue_fields)
+end
+
+function M.update_issue_labels()
+    local issue_id = utils.get_current_word()
+    if not M.options.issue_regex or M.options.issue_regex == "" then
+        vim.notify("Issue regex not set", vim.log.levels.WARN)
+        return
+    end
+
+    local parsed_issue_id = string.match(issue_id, M.options.issue_regex)
+    if not parsed_issue_id then
+        vim.notify("Not a valid issue ID: " .. issue_id, vim.log.levels.WARN)
+        return
+    end
+    
+    local issue = M.client:get_issue_details(parsed_issue_id)
+    if not issue then
+        return
+    end
+    
+    M.client:fetch_team_id(function(team_id)
+        if not team_id then
+            vim.notify("Failed to get team ID", vim.log.levels.ERROR)
+            return
+        end
+        
+        show_label_picker(team_id, function(label_ids)
+            M.client:update_issue(issue.id, { labelIds = label_ids }, function(updated_issue)
+                if updated_issue then
+                    vim.notify("Issue labels updated successfully", vim.log.levels.INFO)
+                else
+                    vim.notify("Failed to update issue labels", vim.log.levels.ERROR)
+                end
+            end)
+        end)
+    end)
 end
 
 return M
