@@ -262,15 +262,15 @@ function M.show_issue_details()
 end
 
 function M.update_issue_labels()
-    local issue_id = utils.get_current_word()
     if not M.options.issue_regex or M.options.issue_regex == "" then
         vim.notify("Issue regex not set", vim.log.levels.WARN)
         return
     end
-
-    local parsed_issue_id = string.match(issue_id, M.options.issue_regex)
+    
+    local word = utils.get_current_word()
+    local parsed_issue_id = string.match(word, M.options.issue_regex)
     if not parsed_issue_id then
-        vim.notify("Not a valid issue ID: " .. issue_id, vim.log.levels.WARN)
+        vim.notify("Not a valid issue ID: " .. word, vim.log.levels.WARN)
         return
     end
     
@@ -292,6 +292,48 @@ function M.update_issue_labels()
                 else
                     vim.notify("Failed to update issue labels", vim.log.levels.ERROR)
                 end
+            end)
+        end)
+    end)
+end
+
+function M.search_and_update_issue_labels()
+    local issues = M.client:get_assigned_issues()
+    if not issues or #issues == 0 then
+        vim.notify("No issues found", vim.log.levels.WARN)
+        return
+    end
+    
+    local entries = {}
+    for _, issue in ipairs(issues) do
+        local description = issue.description
+        if description == vim.NIL or description == nil then
+            description = "No description available"
+        end
+        table.insert(entries, {
+            value = issue.id,
+            display = issue.identifier .. " - " .. issue.title,
+            ordinal = issue.identifier .. " - " .. issue.title,
+            description = description,
+            issue = issue,
+        })
+    end
+    
+    utils.show_telescope_picker_with_action(entries, "Select Issue to Update Labels", function(selected_issue)
+        M.client:fetch_team_id(function(team_id)
+            if not team_id then
+                vim.notify("Failed to get team ID", vim.log.levels.ERROR)
+                return
+            end
+            
+            show_label_picker(team_id, function(label_ids)
+                M.client:update_issue(selected_issue.value, { labelIds = label_ids }, function(updated_issue)
+                    if updated_issue then
+                        vim.notify("Issue labels updated successfully: " .. selected_issue.display, vim.log.levels.INFO)
+                    else
+                        vim.notify("Failed to update issue labels", vim.log.levels.ERROR)
+                    end
+                end)
             end)
         end)
     end)

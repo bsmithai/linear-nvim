@@ -198,6 +198,52 @@ function M.show_telescope_picker_multiselect(entries, prompt_title, callback)
         :find()
 end
 
+--- @param entries Entry[]
+--- @param prompt_title string
+--- @param callback function(selected: Entry)
+function M.show_telescope_picker_with_action(entries, prompt_title, callback)
+    pickers
+        .new({}, {
+            prompt_title = prompt_title,
+            finder = finders.new_table({
+                results = entries,
+                entry_maker = function(entry)
+                    return {
+                        value = entry.value,
+                        display = entry.display,
+                        ordinal = entry.ordinal,
+                        description = entry.description,
+                        issue = entry.issue,
+                    }
+                end,
+            }),
+            sorter = conf.generic_sorter({}),
+            previewer = previewers.new_buffer_previewer({
+                define_preview = function(self, entry, _)
+                    local lines =
+                        vim.split(entry.description, "\n", { plain = true })
+                    vim.api.nvim_buf_set_lines(
+                        self.state.bufnr,
+                        0,
+                        -1,
+                        false,
+                        lines
+                    )
+                end,
+            }),
+            attach_mappings = function(prompt_bufnr, map)
+                actions.select_default:replace(function()
+                    actions.close(prompt_bufnr)
+                    local selection = action_state.get_selected_entry()
+                    callback(selection)
+                end)
+                
+                return true
+            end,
+        })
+        :find()
+end
+
 function M.get_current_word()
     return vim.fn.expand("<cWORD>")
 end
