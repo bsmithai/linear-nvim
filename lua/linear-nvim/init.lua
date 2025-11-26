@@ -364,7 +364,8 @@ function M.search_and_show_issue_details()
     utils.show_telescope_picker_with_action(entries, "Select Issue to View Details", function(selected_issue)
         local issue = M.client:get_issue_details(selected_issue.value)
         if issue then
-            show_create_issues_result_picker(issue, M.options.issue_fields)
+            local issue_view = require("linear-nvim.issue-view")
+            issue_view.show_issue_in_buffer(issue, M.options)
         end
     end)
 end
