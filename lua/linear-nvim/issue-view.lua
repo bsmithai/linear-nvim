@@ -151,28 +151,45 @@ function M.show_issue_in_buffer(issue, options)
     -- Make buffer read-only
     vim.api.nvim_buf_set_option(buf, 'modifiable', false)
     
-    -- Open in a split or current window
-    local win_width = vim.api.nvim_get_option("columns")
-    local win_height = vim.api.nvim_get_option("lines")
+    -- Function to calculate window size and position
+    local function get_window_config()
+        local win_width = vim.api.nvim_get_option("columns")
+        local win_height = vim.api.nvim_get_option("lines")
+        
+        local width = math.min(100, math.floor(win_width * 0.8))
+        local height = math.min(40, math.floor(win_height * 0.8))
+        
+        local row = math.floor((win_height - height) / 2)
+        local col = math.floor((win_width - width) / 2)
+        
+        return {
+            relative = 'editor',
+            width = width,
+            height = height,
+            row = row,
+            col = col,
+            style = 'minimal',
+            border = 'rounded',
+        }
+    end
     
     -- Create a floating window
-    local width = math.min(100, math.floor(win_width * 0.8))
-    local height = math.min(40, math.floor(win_height * 0.8))
+    local win = vim.api.nvim_open_win(buf, true, get_window_config())
     
-    local row = math.floor((win_height - height) / 2)
-    local col = math.floor((win_width - width) / 2)
+    -- Handle window resize
+    local function resize_window()
+        if vim.api.nvim_win_is_valid(win) then
+            vim.api.nvim_win_set_config(win, get_window_config())
+        end
+    end
     
-    local opts = {
-        relative = 'editor',
-        width = width,
-        height = height,
-        row = row,
-        col = col,
-        style = 'minimal',
-        border = 'rounded',
-    }
-    
-    local win = vim.api.nvim_open_win(buf, true, opts)
+    -- Set up autocmd for VimResized event
+    local resize_group = vim.api.nvim_create_augroup('LinearIssueViewResize', { clear = true })
+    vim.api.nvim_create_autocmd('VimResized', {
+        group = resize_group,
+        buffer = buf,
+        callback = resize_window,
+    })
     
     -- Set window options
     vim.api.nvim_win_set_option(win, 'cursorline', true)
