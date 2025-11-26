@@ -339,4 +339,34 @@ function M.search_and_update_issue_labels()
     end)
 end
 
+function M.search_and_show_issue_details()
+    local issues = M.client:get_assigned_issues()
+    if not issues or #issues == 0 then
+        vim.notify("No issues found", vim.log.levels.WARN)
+        return
+    end
+    
+    local entries = {}
+    for _, issue in ipairs(issues) do
+        local description = issue.description
+        if description == vim.NIL or description == nil then
+            description = "No description available"
+        end
+        table.insert(entries, {
+            value = issue.id,
+            display = issue.identifier .. " - " .. issue.title,
+            ordinal = issue.identifier .. " - " .. issue.title,
+            description = description,
+            issue = issue,
+        })
+    end
+    
+    utils.show_telescope_picker_with_action(entries, "Select Issue to View Details", function(selected_issue)
+        local issue = M.client:get_issue_details(selected_issue.value)
+        if issue then
+            show_create_issues_result_picker(issue, M.options.issue_fields)
+        end
+    end)
+end
+
 return M
