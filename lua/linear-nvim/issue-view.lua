@@ -79,43 +79,87 @@ function M.show_issue_in_buffer(issue, options)
         table.insert(highlights, {line = #lines - 1, col_start = 2, col_end = 13, hl_group = "Special"})
         table.insert(lines, "")
         
-        -- Parse and render markdown
+        -- Parse and render markdown with virtual text replacements
         for desc_line in issue.description:gmatch("[^\r\n]+") do
             local line_start = #lines
-            local indented_line = "    " .. desc_line
+            local rendered_line = desc_line
+            
+            -- Replace checkbox syntax with pretty characters
+            rendered_line = rendered_line:gsub("%- %[X%]", "- ✔")
+            rendered_line = rendered_line:gsub("%- %[x%]", "- ✔")
+            rendered_line = rendered_line:gsub("%- %[ %]", "- □")
+            
+            -- Replace bullet points with prettier bullets
+            rendered_line = rendered_line:gsub("^%s*%-%s", function(match)
+                return match:gsub("%-", "•")
+            end)
+            rendered_line = rendered_line:gsub("^%s*%*%s", function(match)
+                return match:gsub("%*", "•")
+            end)
+            
+            local indented_line = "    " .. rendered_line
             table.insert(lines, indented_line)
             
             -- Highlight markdown headers (###, ##, #)
             if desc_line:match("^###%s") then
-                table.insert(highlights, {line = line_start, col_start = 4, col_end = 7, hl_group = "Special"})
+                table.insert(highlights, {line = line_start, col_start = 4, col_end = 7, hl_group = "Comment"})
                 table.insert(highlights, {line = line_start, col_start = 8, col_end = #indented_line, hl_group = "Title"})
             elseif desc_line:match("^##%s") then
-                table.insert(highlights, {line = line_start, col_start = 4, col_end = 6, hl_group = "Special"})
+                table.insert(highlights, {line = line_start, col_start = 4, col_end = 6, hl_group = "Comment"})
                 table.insert(highlights, {line = line_start, col_start = 7, col_end = #indented_line, hl_group = "Title"})
             elseif desc_line:match("^#%s") then
-                table.insert(highlights, {line = line_start, col_start = 4, col_end = 5, hl_group = "Special"})
+                table.insert(highlights, {line = line_start, col_start = 4, col_end = 5, hl_group = "Comment"})
                 table.insert(highlights, {line = line_start, col_start = 6, col_end = #indented_line, hl_group = "Title"})
             end
             
-            -- Highlight bullet points (*, -)
-            if desc_line:match("^%s*[%*%-]%s") then
-                local bullet_pos = desc_line:find("[%*%-]")
-                if bullet_pos then
-                    table.insert(highlights, {line = line_start, col_start = 4 + bullet_pos - 1, col_end = 4 + bullet_pos, hl_group = "Special"})
+            -- Highlight checkboxes
+            if rendered_line:match("✔") then
+                local checkbox_pos = rendered_line:find("✔")
+                if checkbox_pos then
+                    table.insert(highlights, {line = line_start, col_start = 4 + checkbox_pos - 1, col_end = 4 + checkbox_pos + 2, hl_group = "String"})
+                end
+            end
+            if rendered_line:match("□") then
+                local checkbox_pos = rendered_line:find("□")
+                if checkbox_pos then
+                    table.insert(highlights, {line = line_start, col_start = 4 + checkbox_pos - 1, col_end = 4 + checkbox_pos + 2, hl_group = "Comment"})
                 end
             end
             
-            -- Highlight bold (**text**)
-            for bold_text in desc_line:gmatch("%*%*(.-)%*%*") do
-                local start_pos = desc_line:find("%*%*" .. bold_text:gsub("[%^%$%(%)%%%.%[%]%*%+%-%?]", "%%%1") .. "%*%*")
-                if start_pos then
-                    table.insert(highlights, {line = line_start, col_start = 4 + start_pos - 1, col_end = 4 + start_pos + #bold_text + 3, hl_group = "Bold"})
+            -- Highlight bullet points
+            if rendered_line:match("^%s*•%s") then
+                local bullet_pos = rendered_line:find("•")
+                if bullet_pos then
+                    table.insert(highlights, {line = line_start, col_start = 4 + bullet_pos - 1, col_end = 4 + bullet_pos + 2, hl_group = "Special"})
+                end
+            end
+            
+            -- Highlight bold (**text**) - remove the ** and highlight the text
+            local bold_start = rendered_line:find("%*%*")
+            while bold_start do
+                local bold_end = rendered_line:find("%*%*", bold_start + 2)
+                if bold_end then
+                    local before = rendered_line:sub(1, bold_start - 1)
+                    local bold_text = rendered_line:sub(bold_start + 2, bold_end - 1)
+                    local after = rendered_line:sub(bold_end + 2)
+                    rendered_line = before .. bold_text .. after
+                    
+                    -- Update the line in the buffer
+                    lines[#lines] = "    " .. rendered_line
+                    indented_line = lines[#lines]
+                    
+                    -- Add highlight for the bold text
+                    table.insert(highlights, {line = line_start, col_start = 4 + #before, col_end = 4 + #before + #bold_text, hl_group = "Bold"})
+                    
+                    bold_start = rendered_line:find("%*%*")
+                else
+                    break
                 end
             end
             
             -- Highlight code blocks (`code`)
-            for code_text in desc_line:gmatch("`([^`]+)`") do
-                local start_pos = desc_line:find("`" .. code_text:gsub("[%^%$%(%)%%%.%[%]%*%+%-%?]", "%%%1") .. "`")
+            for code_text in rendered_line:gmatch("`([^`]+)`") do
+                local start_pos = rendered_line:find("`" .. code_text:gsub("[%^%$%(%)%%%.%[%]%*%+%-%?]", "%%%1") .. "`")
                 if start_pos then
                     table.insert(highlights, {line = line_start, col_start = 4 + start_pos - 1, col_end = 4 + start_pos + #code_text + 1, hl_group = "String"})
                 end
