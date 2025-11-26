@@ -56,6 +56,7 @@ LinearClient._make_query = function(api_key, query)
         return nil
     end
     
+    print(string.format("[DEBUG] Returning data of type: %s", type(data)))
     return data
 end
 
@@ -284,6 +285,11 @@ function LinearClient:create_issue(title, description, callback)
         )
 
         local data = self._make_query(self:fetch_api_key(), query)
+        
+        print(string.format("[DEBUG] create_issue received data of type: %s", type(data)))
+        if data then
+            print(string.format("[DEBUG] data.data is of type: %s", type(data.data)))
+        end
 
         if
             data
