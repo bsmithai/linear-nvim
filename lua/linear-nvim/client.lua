@@ -57,6 +57,7 @@ LinearClient._make_query = function(api_key, query)
     end
     
     print(string.format("[DEBUG] Returning data of type: %s", type(data)))
+    print(string.format("[DEBUG] Response body preview: %s", resp.body:sub(1, 500)))
     return data
 end
 
