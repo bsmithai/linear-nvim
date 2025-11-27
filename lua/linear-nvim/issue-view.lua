@@ -55,11 +55,32 @@ function M.show_issue_in_buffer(issue, options)
     
     -- Labels
     if issue.labels and issue.labels ~= vim.NIL and issue.labels.nodes and #issue.labels.nodes > 0 then
-        local label_names = {}
-        for _, label in ipairs(issue.labels.nodes) do
-            table.insert(label_names, label.name)
+        local label_line = "    Labels:  "
+        local line_start_col = #label_line
+        
+        for i, label in ipairs(issue.labels.nodes) do
+            if i > 1 then
+                label_line = label_line .. "  "
+            end
+            
+            local color = label.color or "#808080"
+            local hl_group = "LinearLabel_" .. color:gsub("#", "")
+            
+            vim.api.nvim_set_hl(0, hl_group, { fg = color })
+            
+            local dot_start = #label_line
+            label_line = label_line .. "● " .. label.name
+            local dot_end = dot_start + 1
+            
+            table.insert(highlights, {
+                line = #lines,
+                col_start = dot_start,
+                col_end = dot_end,
+                hl_group = hl_group
+            })
         end
-        table.insert(lines, "    Labels:  " .. table.concat(label_names, ", "))
+        
+        table.insert(lines, label_line)
         table.insert(highlights, {line = #lines - 1, col_start = 4, col_end = 13, hl_group = "Label"})
     end
     
