@@ -418,15 +418,22 @@ function M.show_issue_in_buffer(issue, options)
         vim.api.nvim_buf_set_lines(edit_buf, 0, -1, false, lines_to_write)
         vim.api.nvim_buf_set_option(edit_buf, 'modified', false)
         
+        local has_obsidian_ui, obsidian_ui = pcall(require, "obsidian.ui")
         local has_obsidian, obsidian = pcall(require, "obsidian")
-        if has_obsidian and obsidian.get_client then
+        
+        if has_obsidian_ui and has_obsidian and obsidian.get_client then
             local client = obsidian.get_client()
             if client and client.opts and client.opts.ui and client.opts.ui.enable then
-                vim.api.nvim_buf_call(edit_buf, function()
-                    if client.apply_ui_to_buf then
-                        client:apply_ui_to_buf(edit_buf)
-                    end
+                vim.schedule(function()
+                    obsidian_ui.update(client.opts.ui, edit_buf)
                 end)
+                
+                vim.api.nvim_create_autocmd({'TextChanged', 'TextChangedI'}, {
+                    buffer = edit_buf,
+                    callback = function()
+                        obsidian_ui.update(client.opts.ui, edit_buf)
+                    end,
+                })
             else
                 setup_markdown_ui(edit_buf)
             end
