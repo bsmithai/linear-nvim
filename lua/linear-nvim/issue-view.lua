@@ -162,7 +162,11 @@ function M.show_issue_in_buffer(issue, options)
                     })
                     
                     if code_lang and code_block_start and #code_block_lines > 0 then
+                        local saved_indent_len = indent_len
+                        local saved_code_block_start = code_block_start
+                        local saved_line_num = line_num
                         local code_text = table.concat(code_block_lines, "\n")
+                        
                         vim.schedule(function()
                             if not vim.api.nvim_buf_is_valid(buf) then return end
                             
@@ -177,16 +181,18 @@ function M.show_issue_in_buffer(issue, options)
                                             local capture_name = query.captures[id]
                                             local start_row, start_col, end_row, end_col = node:range()
                                             
-                                            local actual_line_num = code_block_start + 1 + start_row
-                                            if actual_line_num < line_num then
+                                            local actual_line_num = saved_code_block_start + 1 + start_row
+                                            if actual_line_num < saved_line_num then
                                                 local hl_group = '@' .. capture_name .. '.' .. code_lang
-                                                vim.api.nvim_buf_add_highlight(
+                                                local end_col_adjusted = start_row == end_row and (saved_indent_len + end_col) or -1
+                                                
+                                                pcall(vim.api.nvim_buf_add_highlight,
                                                     buf,
                                                     ui_ns_id,
                                                     hl_group,
                                                     actual_line_num,
-                                                    indent_len + start_col,
-                                                    start_row == end_row and (indent_len + end_col) or -1
+                                                    saved_indent_len + start_col,
+                                                    end_col_adjusted
                                                 )
                                             end
                                         end
