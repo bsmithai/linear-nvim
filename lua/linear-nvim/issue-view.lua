@@ -263,9 +263,14 @@ function M.show_issue_in_buffer(issue, options)
     
     local function edit_description()
         -- Capture the issue ID BEFORE closing
+        local log = require("plenary.log")
+        log.debug("Issue object: " .. vim.inspect(issue))
+        
         local issue_id = issue.id
+        log.debug("Issue ID: " .. tostring(issue_id))
+        
         if not issue_id or issue_id == vim.NIL then
-            vim.notify("Error: Issue ID not found", vim.log.levels.ERROR)
+            vim.notify("Error: Issue ID not found. Keys: " .. vim.inspect(vim.tbl_keys(issue)), vim.log.levels.ERROR)
             return
         end
         
