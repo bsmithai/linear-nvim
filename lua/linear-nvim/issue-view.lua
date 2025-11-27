@@ -396,9 +396,8 @@ function M.show_issue_in_buffer(issue, options)
             end)
         end
         
-        -- Map q and <Esc> to save and close
+        -- Map q to save and close (only in normal mode)
         vim.keymap.set('n', 'q', safe_quit, { buffer = edit_buf, silent = true })
-        vim.keymap.set('n', '<Esc>', safe_quit, { buffer = edit_buf, silent = true })
         
         -- Also clean up on window close
         vim.api.nvim_create_autocmd('WinClosed', {
