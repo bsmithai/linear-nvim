@@ -252,12 +252,22 @@ function M.show_issue_in_buffer(issue, options)
         end
     end
     
-    -- Set up autocmd for VimResized event
+    -- Set up autocmd for VimResized event and window leave
     local resize_group = vim.api.nvim_create_augroup('LinearIssueViewResize', { clear = true })
     vim.api.nvim_create_autocmd('VimResized', {
         group = resize_group,
         buffer = buf,
         callback = resize_window,
+    })
+    
+    vim.api.nvim_create_autocmd('WinLeave', {
+        group = resize_group,
+        buffer = buf,
+        callback = function()
+            if vim.api.nvim_win_is_valid(win) then
+                vim.api.nvim_win_close(win, true)
+            end
+        end,
     })
     
     -- Set window options
