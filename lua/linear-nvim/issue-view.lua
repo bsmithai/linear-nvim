@@ -264,6 +264,13 @@ function M.show_issue_in_buffer(issue, options)
     local function edit_description()
         close_window()
         
+        -- Capture the issue ID before closing
+        local issue_id = issue.id
+        if not issue_id or issue_id == vim.NIL then
+            vim.notify("Error: Issue ID not found", vim.log.levels.ERROR)
+            return
+        end
+        
         -- Create a temporary markdown file
         local tmp_file = vim.fn.tempname() .. '.md'
         
@@ -293,7 +300,7 @@ function M.show_issue_in_buffer(issue, options)
                 local linear_nvim = require("linear-nvim")
                 local client = linear_nvim.client
                 
-                client:update_issue(issue.id, { description = updated_desc }, function(updated_issue)
+                client:update_issue(issue_id, { description = updated_desc }, function(updated_issue)
                     if updated_issue then
                         vim.notify("Issue description updated successfully", vim.log.levels.INFO)
                     else

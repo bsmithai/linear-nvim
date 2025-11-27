@@ -399,7 +399,13 @@ function LinearClient:update_issue(issue_id, updates, callback)
     end
     
     if updates.description then
-        local parsed_desc = utils.escape_json_string(updates.description)
+        -- Double escape for GraphQL in JSON
+        local parsed_desc = updates.description
+        parsed_desc = parsed_desc:gsub("\\", "\\\\\\\\") -- Escape backslashes (needs 4 for JSON in GraphQL)
+        parsed_desc = parsed_desc:gsub('"', '\\\\\\"') -- Escape quotes
+        parsed_desc = parsed_desc:gsub("\n", "\\\\n") -- Escape newlines
+        parsed_desc = parsed_desc:gsub("\r", "\\\\r") -- Escape carriage returns
+        parsed_desc = parsed_desc:gsub("\t", "\\\\t") -- Escape tabs
         table.insert(update_fields, string.format('description: \\"%s\\"', parsed_desc))
     end
     
