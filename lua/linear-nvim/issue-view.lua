@@ -94,92 +94,17 @@ function M.show_issue_in_buffer(issue, options)
     table.insert(lines, "")
     
     -- Description section
+    local desc_start_line = nil
     if issue.description and issue.description ~= vim.NIL and issue.description ~= "" then
         table.insert(lines, "  Description")
         table.insert(highlights, {line = #lines - 1, col_start = 2, col_end = 13, hl_group = "Special"})
         table.insert(lines, "")
         
-        -- Parse and render markdown with virtual text replacements
+        desc_start_line = #lines
+        
         for desc_line in issue.description:gmatch("[^\r\n]+") do
-            local line_start = #lines
-            local rendered_line = desc_line
-            
-            -- Replace checkbox syntax with pretty characters
-            rendered_line = rendered_line:gsub("%- %[X%]", "- ✔")
-            rendered_line = rendered_line:gsub("%- %[x%]", "- ✔")
-            rendered_line = rendered_line:gsub("%- %[ %]", "- □")
-            
-            -- Replace bullet points with prettier bullets
-            rendered_line = rendered_line:gsub("^%s*%-%s", function(match)
-                return match:gsub("%-", "•")
-            end)
-            rendered_line = rendered_line:gsub("^%s*%*%s", function(match)
-                return match:gsub("%*", "•")
-            end)
-            
-            local indented_line = "    " .. rendered_line
+            local indented_line = "    " .. desc_line
             table.insert(lines, indented_line)
-            
-            -- Highlight markdown headers (###, ##, #)
-            if desc_line:match("^###%s") then
-                table.insert(highlights, {line = line_start, col_start = 4, col_end = 7, hl_group = "Comment"})
-                table.insert(highlights, {line = line_start, col_start = 8, col_end = #indented_line, hl_group = "Title"})
-            elseif desc_line:match("^##%s") then
-                table.insert(highlights, {line = line_start, col_start = 4, col_end = 6, hl_group = "Comment"})
-                table.insert(highlights, {line = line_start, col_start = 7, col_end = #indented_line, hl_group = "Title"})
-            elseif desc_line:match("^#%s") then
-                table.insert(highlights, {line = line_start, col_start = 4, col_end = 5, hl_group = "Comment"})
-                table.insert(highlights, {line = line_start, col_start = 6, col_end = #indented_line, hl_group = "Title"})
-            end
-            
-            -- Highlight checkboxes
-            if rendered_line:match("✔") then
-                local checkbox_pos = rendered_line:find("✔")
-                if checkbox_pos then
-                    table.insert(highlights, {line = line_start, col_start = 4 + checkbox_pos - 1, col_end = 4 + checkbox_pos + 2, hl_group = "String"})
-                end
-            end
-            if rendered_line:match("□") then
-                local checkbox_pos = rendered_line:find("□")
-                if checkbox_pos then
-                    table.insert(highlights, {line = line_start, col_start = 4 + checkbox_pos - 1, col_end = 4 + checkbox_pos + 2, hl_group = "Comment"})
-                end
-            end
-            
-            -- Highlight bullet points
-            if rendered_line:match("^%s*•%s") then
-                local bullet_pos = rendered_line:find("•")
-                if bullet_pos then
-                    table.insert(highlights, {line = line_start, col_start = 4 + bullet_pos - 1, col_end = 4 + bullet_pos + 2, hl_group = "Special"})
-                end
-            end
-            
-            local bold_start = rendered_line:find("%*%*")
-            while bold_start do
-                local bold_end = rendered_line:find("%*%*", bold_start + 2)
-                if bold_end then
-                    local before = rendered_line:sub(1, bold_start - 1)
-                    local bold_text = rendered_line:sub(bold_start + 2, bold_end - 1)
-                    local after = rendered_line:sub(bold_end + 2)
-                    rendered_line = before .. bold_text .. after
-                    
-                    lines[#lines] = "    " .. rendered_line
-                    indented_line = lines[#lines]
-                    
-                    table.insert(highlights, {line = line_start, col_start = 4 + #before, col_end = 4 + #before + #bold_text, hl_group = "Bold"})
-                    
-                    bold_start = rendered_line:find("%*%*")
-                else
-                    break
-                end
-            end
-            
-            for code_text in rendered_line:gmatch("`([^`]+)`") do
-                local start_pos = rendered_line:find("`" .. code_text:gsub("[%^%$%(%)%%%.%[%]%*%+%-%?]", "%%%1") .. "`")
-                if start_pos then
-                    table.insert(highlights, {line = line_start, col_start = 4 + start_pos - 1, col_end = 4 + start_pos + #code_text + 1, hl_group = "String"})
-                end
-            end
         end
         
         table.insert(lines, "")
@@ -203,6 +128,203 @@ function M.show_issue_in_buffer(issue, options)
     local ns_id = vim.api.nvim_create_namespace('linear_issue_view')
     for _, hl in ipairs(highlights) do
         vim.api.nvim_buf_add_highlight(buf, ns_id, hl.hl_group, hl.line, hl.col_start, hl.col_end)
+    end
+    
+    if desc_start_line then
+        local ui_ns_id = vim.api.nvim_create_namespace('linear_markdown_ui')
+        local lines_content = vim.api.nvim_buf_get_lines(buf, desc_start_line, -1, false)
+        
+        local in_code_block = false
+        local code_lang = nil
+        local code_block_lines = {}
+        local code_block_start = nil
+        
+        for i, line in ipairs(lines_content) do
+            local line_num = desc_start_line + i - 1
+            local actual_line = line:match("^%s*(.*)") or line
+            local indent_len = #line - #actual_line
+            
+            if actual_line:match("^```") then
+                if not in_code_block then
+                    in_code_block = true
+                    code_block_start = line_num
+                    code_lang = actual_line:match("^```(%w+)")
+                    code_block_lines = {}
+                    vim.api.nvim_buf_set_extmark(buf, ui_ns_id, line_num, indent_len, {
+                        end_col = #line,
+                        conceal = "",
+                    })
+                else
+                    in_code_block = false
+                    vim.api.nvim_buf_set_extmark(buf, ui_ns_id, line_num, indent_len, {
+                        end_col = #line,
+                        conceal = "",
+                    })
+                    
+                    if code_lang and code_block_start and #code_block_lines > 0 then
+                        local saved_indent_len = indent_len
+                        local saved_code_block_start = code_block_start
+                        local saved_line_num = line_num
+                        local saved_code_lang = code_lang
+                        local code_text = table.concat(code_block_lines, "\n")
+                        
+                        vim.schedule(function()
+                            if not vim.api.nvim_buf_is_valid(buf) then return end
+                            
+                            local ok, parser = pcall(vim.treesitter.get_string_parser, code_text, saved_code_lang)
+                            if ok and parser then
+                                local ok_parse, trees = pcall(function() return parser:parse() end)
+                                if ok_parse and trees and trees[1] then
+                                    local tree = trees[1]
+                                    local ok_query, query = pcall(vim.treesitter.query.get, saved_code_lang, 'highlights')
+                                    if ok_query and query then
+                                        local captures = {}
+                                        for id, node in query:iter_captures(tree:root(), code_text, 0, #code_block_lines) do
+                                            local capture_name = query.captures[id]
+                                            local start_row, start_col, end_row, end_col = node:range()
+                                            table.insert(captures, {
+                                                name = capture_name,
+                                                start_row = start_row,
+                                                start_col = start_col,
+                                                end_row = end_row,
+                                                end_col = end_col,
+                                            })
+                                        end
+                                        
+                                        table.sort(captures, function(a, b)
+                                            if a.start_row ~= b.start_row then return a.start_row < b.start_row end
+                                            if a.start_col ~= b.start_col then return a.start_col < b.start_col end
+                                            local a_size = (a.end_row - a.start_row) * 1000 + (a.end_col - a.start_col)
+                                            local b_size = (b.end_row - b.start_row) * 1000 + (b.end_col - b.start_col)
+                                            return a_size < b_size
+                                        end)
+                                        
+                                        for _, capture in ipairs(captures) do
+                                            local capture_name = capture.name
+                                            local start_row = capture.start_row
+                                            local start_col = capture.start_col
+                                            local end_row = capture.end_row
+                                            local end_col = capture.end_col
+                                            
+                                            if start_row == end_row then
+                                                local actual_line_num = saved_code_block_start + 1 + start_row
+                                                if actual_line_num < saved_line_num then
+                                                    local hl_group = '@' .. capture_name .. '.' .. saved_code_lang
+                                                    
+                                                    pcall(vim.api.nvim_buf_add_highlight,
+                                                        buf,
+                                                        ui_ns_id,
+                                                        hl_group,
+                                                        actual_line_num,
+                                                        saved_indent_len + start_col,
+                                                        saved_indent_len + end_col
+                                                    )
+                                                end
+                                            else
+                                                for row = start_row, end_row do
+                                                    local actual_line_num = saved_code_block_start + 1 + row
+                                                    if actual_line_num < saved_line_num then
+                                                        local hl_group = '@' .. capture_name .. '.' .. saved_code_lang
+                                                        local row_start_col = row == start_row and (saved_indent_len + start_col) or saved_indent_len
+                                                        local row_end_col = row == end_row and (saved_indent_len + end_col) or -1
+                                                        
+                                                        pcall(vim.api.nvim_buf_add_highlight,
+                                                            buf,
+                                                            ui_ns_id,
+                                                            hl_group,
+                                                            actual_line_num,
+                                                            row_start_col,
+                                                            row_end_col
+                                                        )
+                                                    end
+                                                end
+                                            end
+                                        end
+                                    end
+                                end
+                            end
+                        end)
+                    end
+                    
+                    code_lang = nil
+                    code_block_start = nil
+                    code_block_lines = {}
+                end
+            elseif in_code_block then
+                table.insert(code_block_lines, actual_line)
+            else
+                if actual_line:match("%- %[ %]") then
+                    local start_pos = actual_line:find("%- %[ %]")
+                    vim.api.nvim_buf_set_extmark(buf, ui_ns_id, line_num, indent_len + start_pos - 1, {
+                        end_col = indent_len + start_pos - 1 + 6,
+                        conceal = "□ ",
+                        hl_mode = "combine",
+                    })
+                end
+                
+                if actual_line:match("%- %[x%]") then
+                    local start_pos = actual_line:find("%- %[x%]")
+                    vim.api.nvim_buf_set_extmark(buf, ui_ns_id, line_num, indent_len + start_pos - 1, {
+                        end_col = indent_len + start_pos - 1 + 6,
+                        conceal = "✔ ",
+                        hl_mode = "combine",
+                    })
+                elseif actual_line:match("%- %[X%]") then
+                    local start_pos = actual_line:find("%- %[X%]")
+                    vim.api.nvim_buf_set_extmark(buf, ui_ns_id, line_num, indent_len + start_pos - 1, {
+                        end_col = indent_len + start_pos - 1 + 6,
+                        conceal = "✔ ",
+                        hl_mode = "combine",
+                    })
+                end
+                
+                local bullet_dash = actual_line:match("^%s*%- ")
+                if bullet_dash and not actual_line:find("%- %[") then
+                    local dash_pos = actual_line:find("%-")
+                    if dash_pos then
+                        vim.api.nvim_buf_set_extmark(buf, ui_ns_id, line_num, indent_len + dash_pos - 1, {
+                            end_col = indent_len + dash_pos,
+                            virt_text = {{"•", "LinearMdBullet"}},
+                            virt_text_pos = "overlay",
+                            hl_mode = "combine",
+                        })
+                    end
+                end
+                
+                local bullet_star = actual_line:match("^%s*%* ")
+                if bullet_star and not actual_line:find("%* %[") then
+                    local star_pos = actual_line:find("%*")
+                    if star_pos then
+                        vim.api.nvim_buf_set_extmark(buf, ui_ns_id, line_num, indent_len + star_pos - 1, {
+                            end_col = indent_len + star_pos,
+                            virt_text = {{"•", "LinearMdBullet"}},
+                            virt_text_pos = "overlay",
+                            hl_mode = "combine",
+                        })
+                    end
+                end
+                
+                local inline_start = 1
+                while true do
+                    local code_start = actual_line:find("`", inline_start, true)
+                    if not code_start then break end
+                    local code_end = actual_line:find("`", code_start + 1, true)
+                    if not code_end then break end
+                    
+                    vim.api.nvim_buf_set_extmark(buf, ui_ns_id, line_num, indent_len + code_start - 1, {
+                        end_col = indent_len + code_start,
+                        conceal = "",
+                    })
+                    vim.api.nvim_buf_set_extmark(buf, ui_ns_id, line_num, indent_len + code_end - 1, {
+                        end_col = indent_len + code_end,
+                        conceal = "",
+                    })
+                    vim.api.nvim_buf_add_highlight(buf, ui_ns_id, "String", line_num, indent_len + code_start, indent_len + code_end)
+                    
+                    inline_start = code_end + 1
+                end
+            end
+        end
     end
     
     -- Make buffer read-only
@@ -279,6 +401,8 @@ function M.show_issue_in_buffer(issue, options)
     vim.api.nvim_win_set_option(win, 'breakindent', true)
     vim.api.nvim_win_set_option(win, 'breakindentopt', 'shift:0')
     vim.api.nvim_win_set_option(win, 'linebreak', true)
+    vim.api.nvim_win_set_option(win, 'conceallevel', 2)
+    vim.api.nvim_win_set_option(win, 'concealcursor', 'nc')
     
     local function close_window()
         if vim.api.nvim_win_is_valid(win) then
@@ -292,6 +416,88 @@ function M.show_issue_in_buffer(issue, options)
             utils.open_in_browser_raw(issue.url)
             close_window()
         end
+    end
+    
+    local function setup_markdown_ui(buf)
+        local ns_id = vim.api.nvim_create_namespace('linear_markdown_ui')
+        
+        local hl_groups = {
+            LinearMdTodo = { bold = true, fg = "#f78c6c" },
+            LinearMdDone = { bold = true, fg = "#89ddff" },
+            LinearMdBullet = { bold = true, fg = "#89ddff" },
+            LinearMdImportant = { bold = true, fg = "#d73128" },
+        }
+        
+        for name, opts in pairs(hl_groups) do
+            vim.api.nvim_set_hl(0, name, opts)
+        end
+        
+        local function render_markdown()
+            vim.api.nvim_buf_clear_namespace(buf, ns_id, 0, -1)
+            
+            local lines = vim.api.nvim_buf_get_lines(buf, 0, -1, false)
+            
+            for i, line in ipairs(lines) do
+                local line_num = i - 1
+                
+                local unchecked = line:find("%- %[ %]")
+                if unchecked then
+                    vim.api.nvim_buf_set_extmark(buf, ns_id, line_num, unchecked - 1, {
+                        end_col = unchecked + 4,
+                        virt_text = {{"□ ", "LinearMdTodo"}},
+                        virt_text_pos = "overlay",
+                        hl_mode = "combine",
+                    })
+                end
+                
+                local checked = line:find("%- %[x%]") or line:find("%- %[X%]")
+                if checked then
+                    vim.api.nvim_buf_set_extmark(buf, ns_id, line_num, checked - 1, {
+                        end_col = checked + 4,
+                        virt_text = {{"✔ ", "LinearMdDone"}},
+                        virt_text_pos = "overlay",
+                        hl_mode = "combine",
+                    })
+                end
+                
+                local bullet_dash = line:match("^(%s*)%- ")
+                if bullet_dash and not line:find("%- %[") then
+                    local indent = #bullet_dash
+                    local dash_pos = line:find("%-")
+                    if dash_pos then
+                        vim.api.nvim_buf_set_extmark(buf, ns_id, line_num, dash_pos - 1, {
+                            end_col = dash_pos,
+                            virt_text = {{"•", "LinearMdBullet"}},
+                            virt_text_pos = "overlay",
+                            hl_mode = "combine",
+                        })
+                    end
+                end
+                
+                local bullet_star = line:match("^(%s*)%* ")
+                if bullet_star and not line:find("%* %[") then
+                    local indent = #bullet_star
+                    local star_pos = line:find("%*")
+                    if star_pos then
+                        vim.api.nvim_buf_set_extmark(buf, ns_id, line_num, star_pos - 1, {
+                            end_col = star_pos,
+                            virt_text = {{"•", "LinearMdBullet"}},
+                            virt_text_pos = "overlay",
+                            hl_mode = "combine",
+                        })
+                    end
+                end
+            end
+        end
+        
+        render_markdown()
+        
+        vim.api.nvim_create_autocmd({'TextChanged', 'TextChangedI'}, {
+            buffer = buf,
+            callback = function()
+                render_markdown()
+            end,
+        })
     end
     
     local function edit_description()
@@ -336,6 +542,29 @@ function M.show_issue_in_buffer(issue, options)
         vim.api.nvim_buf_set_lines(edit_buf, 0, -1, false, lines_to_write)
         vim.api.nvim_buf_set_option(edit_buf, 'modified', false)
         
+        local has_obsidian_ui, obsidian_ui = pcall(require, "obsidian.ui")
+        local has_obsidian, obsidian = pcall(require, "obsidian")
+        
+        if has_obsidian_ui and has_obsidian and obsidian.get_client then
+            local client = obsidian.get_client()
+            if client and client.opts and client.opts.ui and client.opts.ui.enable then
+                vim.schedule(function()
+                    obsidian_ui.update(client.opts.ui, edit_buf)
+                end)
+                
+                vim.api.nvim_create_autocmd({'TextChanged', 'TextChangedI'}, {
+                    buffer = edit_buf,
+                    callback = function()
+                        obsidian_ui.update(client.opts.ui, edit_buf)
+                    end,
+                })
+            else
+                setup_markdown_ui(edit_buf)
+            end
+        else
+            setup_markdown_ui(edit_buf)
+        end
+        
         local win_width = vim.api.nvim_get_option("columns")
         local win_height = vim.api.nvim_get_option("lines")
         local width = math.min(100, math.floor(win_width * 0.8))
@@ -357,6 +586,17 @@ function M.show_issue_in_buffer(issue, options)
         
         vim.api.nvim_win_set_option(float_win, 'wrap', true)
         vim.api.nvim_win_set_option(float_win, 'linebreak', true)
+        
+        local has_obsidian = pcall(require, "obsidian")
+        if has_obsidian then
+            vim.keymap.set('n', '<leader>ch', function()
+                return require("obsidian").util.toggle_checkbox()
+            end, { buffer = edit_buf, silent = true })
+            
+            vim.keymap.set('n', '<cr>', function()
+                return require("obsidian").util.smart_action()
+            end, { buffer = edit_buf, silent = true, expr = true })
+        end
         
         local edit_group = vim.api.nvim_create_augroup('LinearIssueDescEdit', { clear = true })
         vim.api.nvim_create_autocmd('BufWritePost', {
