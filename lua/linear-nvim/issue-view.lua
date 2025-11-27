@@ -180,7 +180,7 @@ function M.show_issue_in_buffer(issue, options)
     
     table.insert(lines, "")
     table.insert(lines, "")
-    table.insert(lines, "  Press 'q' to close | 'o' to open in browser | 'e' to edit labels")
+    table.insert(lines, "  Press 'q' to close | 'o' to open in browser | 'e' to edit description | 'l' to edit labels")
     table.insert(highlights, {line = #lines - 1, col_start = 2, col_end = #lines[#lines], hl_group = "Comment"})
     
     -- Set buffer content
@@ -261,6 +261,61 @@ function M.show_issue_in_buffer(issue, options)
         end
     end
     
+    local function edit_description()
+        close_window()
+        
+        -- Create a temporary markdown file
+        local tmp_file = vim.fn.tempname() .. '.md'
+        
+        -- Write current description to temp file
+        local current_desc = issue.description or ""
+        if current_desc == vim.NIL then
+            current_desc = ""
+        end
+        
+        local lines_to_write = vim.split(current_desc, '\n', { plain = true })
+        vim.fn.writefile(lines_to_write, tmp_file)
+        
+        -- Open in a new buffer
+        vim.cmd('edit ' .. tmp_file)
+        
+        -- Set up autocmd to save on buffer write and update issue
+        local edit_group = vim.api.nvim_create_augroup('LinearIssueDescEdit', { clear = true })
+        vim.api.nvim_create_autocmd('BufWritePost', {
+            group = edit_group,
+            buffer = vim.api.nvim_get_current_buf(),
+            callback = function()
+                -- Read the updated description
+                local updated_lines = vim.api.nvim_buf_get_lines(0, 0, -1, false)
+                local updated_desc = table.concat(updated_lines, '\n')
+                
+                -- Update the issue
+                local linear_nvim = require("linear-nvim")
+                local client = linear_nvim.client
+                
+                client:update_issue(issue.id, { description = updated_desc }, function(updated_issue)
+                    if updated_issue then
+                        vim.notify("Issue description updated successfully", vim.log.levels.INFO)
+                    else
+                        vim.notify("Failed to update issue description", vim.log.levels.ERROR)
+                    end
+                end)
+            end,
+        })
+        
+        -- Clean up temp file on buffer close
+        vim.api.nvim_create_autocmd('BufDelete', {
+            group = edit_group,
+            buffer = vim.api.nvim_get_current_buf(),
+            callback = function()
+                vim.fn.delete(tmp_file)
+            end,
+        })
+        
+        -- Add instruction at the bottom
+        vim.notify("Editing description - :w to save, :q to close", vim.log.levels.INFO)
+    end
+    
     local function edit_labels()
         close_window()
         -- Call the update labels function
@@ -318,7 +373,8 @@ function M.show_issue_in_buffer(issue, options)
     vim.keymap.set('n', 'q', close_window, { buffer = buf, silent = true })
     vim.keymap.set('n', '<Esc>', close_window, { buffer = buf, silent = true })
     vim.keymap.set('n', 'o', open_in_browser, { buffer = buf, silent = true })
-    vim.keymap.set('n', 'e', edit_labels, { buffer = buf, silent = true })
+    vim.keymap.set('n', 'e', edit_description, { buffer = buf, silent = true })
+    vim.keymap.set('n', 'l', edit_labels, { buffer = buf, silent = true })
 end
 
 return M
