@@ -288,14 +288,38 @@ function M.show_issue_in_buffer(issue, options)
         local lines_to_write = vim.split(current_desc, '\n', { plain = true })
         vim.fn.writefile(lines_to_write, tmp_file)
         
-        -- Get list of valid buffers before opening temp file
-        local bufs = vim.tbl_filter(function(b)
-            return vim.api.nvim_buf_is_valid(b) and vim.bo[b].buflisted
-        end, vim.api.nvim_list_bufs())
+        -- Create a buffer for editing
+        local edit_buf = vim.api.nvim_create_buf(false, true)
+        vim.api.nvim_buf_set_option(edit_buf, 'buftype', '')
+        vim.api.nvim_buf_set_option(edit_buf, 'filetype', 'markdown')
+        vim.api.nvim_buf_set_name(edit_buf, tmp_file)
         
-        -- Open in a new buffer (in current window)
-        vim.cmd('edit ' .. vim.fn.fnameescape(tmp_file))
-        local edit_buf = vim.api.nvim_get_current_buf()
+        -- Set the buffer content
+        vim.api.nvim_buf_set_lines(edit_buf, 0, -1, false, lines_to_write)
+        
+        -- Calculate floating window size
+        local win_width = vim.api.nvim_get_option("columns")
+        local win_height = vim.api.nvim_get_option("lines")
+        local width = math.min(100, math.floor(win_width * 0.8))
+        local height = math.min(30, math.floor(win_height * 0.8))
+        local row = math.floor((win_height - height) / 2)
+        local col = math.floor((win_width - width) / 2)
+        
+        -- Open in a floating window
+        local float_win = vim.api.nvim_open_win(edit_buf, true, {
+            relative = 'editor',
+            width = width,
+            height = height,
+            row = row,
+            col = col,
+            style = 'minimal',
+            border = 'rounded',
+            title = ' Edit Description ',
+            title_pos = 'center',
+        })
+        
+        vim.api.nvim_win_set_option(float_win, 'wrap', true)
+        vim.api.nvim_win_set_option(float_win, 'linebreak', true)
         
         -- Set up autocmd to save on buffer write and update issue
         local edit_group = vim.api.nvim_create_augroup('LinearIssueDescEdit', { clear = true })
@@ -321,36 +345,17 @@ function M.show_issue_in_buffer(issue, options)
             end,
         })
         
-        -- Set up a custom quit command that returns to previous buffer
+        -- Set up a custom quit command that closes the floating window
         local function safe_quit()
-            -- Delete the temp file
-            vim.fn.delete(tmp_file)
-            
-            -- Try to switch to a valid buffer from before
-            if #bufs > 0 then
-                for _, b in ipairs(bufs) do
-                    if vim.api.nvim_buf_is_valid(b) and vim.bo[b].buflisted then
-                        vim.cmd('buffer ' .. b)
-                        vim.cmd('bdelete ' .. edit_buf)
-                        return
-                    end
-                end
+            if vim.api.nvim_win_is_valid(float_win) then
+                vim.api.nvim_win_close(float_win, true)
             end
-            -- If no valid buffer, open an empty one before deleting this buffer
-            vim.cmd('enew')
-            vim.cmd('bdelete ' .. edit_buf)
+            vim.fn.delete(tmp_file)
         end
         
-        -- Map :q and :wq to safe quit
+        -- Map q and <Esc> to close
         vim.keymap.set('n', 'q', safe_quit, { buffer = edit_buf, silent = true })
-        vim.api.nvim_buf_set_keymap(edit_buf, 'n', 'ZZ', '', {
-            callback = function()
-                vim.cmd('write')
-                safe_quit()
-            end,
-            noremap = true,
-            silent = true,
-        })
+        vim.keymap.set('n', '<Esc>', safe_quit, { buffer = edit_buf, silent = true })
         
         -- Also clean up on BufUnload just in case
         vim.api.nvim_create_autocmd('BufUnload', {
