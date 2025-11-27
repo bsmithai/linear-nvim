@@ -256,9 +256,8 @@ function M.show_issue_in_buffer(issue, options)
                 if actual_line:match("%- %[ %]") then
                     local start_pos = actual_line:find("%- %[ %]")
                     vim.api.nvim_buf_set_extmark(buf, ui_ns_id, line_num, indent_len + start_pos - 1, {
-                        end_col = indent_len + start_pos + 6,
-                        virt_text = {{"□ ", "LinearMdTodo"}},
-                        virt_text_pos = "overlay",
+                        end_col = indent_len + start_pos - 1 + 6,
+                        conceal = "□",
                         hl_mode = "combine",
                     })
                 end
@@ -266,17 +265,15 @@ function M.show_issue_in_buffer(issue, options)
                 if actual_line:match("%- %[x%]") then
                     local start_pos = actual_line:find("%- %[x%]")
                     vim.api.nvim_buf_set_extmark(buf, ui_ns_id, line_num, indent_len + start_pos - 1, {
-                        end_col = indent_len + start_pos + 6,
-                        virt_text = {{"✔ ", "LinearMdDone"}},
-                        virt_text_pos = "overlay",
+                        end_col = indent_len + start_pos - 1 + 6,
+                        conceal = "✔",
                         hl_mode = "combine",
                     })
                 elseif actual_line:match("%- %[X%]") then
                     local start_pos = actual_line:find("%- %[X%]")
                     vim.api.nvim_buf_set_extmark(buf, ui_ns_id, line_num, indent_len + start_pos - 1, {
-                        end_col = indent_len + start_pos + 6,
-                        virt_text = {{"✔ ", "LinearMdDone"}},
-                        virt_text_pos = "overlay",
+                        end_col = indent_len + start_pos - 1 + 6,
+                        conceal = "✔",
                         hl_mode = "combine",
                     })
                 end
