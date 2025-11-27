@@ -362,21 +362,46 @@ function M.show_issue_in_buffer(issue, options)
             end,
         })
         
-        -- Set up a custom quit command that closes the floating window
+        -- Set up a custom quit command that saves, closes, and reopens issue view
         local function safe_quit()
+            -- Save first
+            local updated_lines = vim.api.nvim_buf_get_lines(edit_buf, 0, -1, false)
+            local updated_desc = table.concat(updated_lines, '\n')
+            
+            -- Write to temp file
+            vim.fn.writefile(updated_lines, tmp_file)
+            
             -- Close the floating window
             if vim.api.nvim_win_is_valid(float_win) then
                 vim.api.nvim_win_close(float_win, true)
             end
+            
             -- Delete the buffer
             if vim.api.nvim_buf_is_valid(edit_buf) then
                 vim.api.nvim_buf_delete(edit_buf, { force = true })
             end
+            
             -- Clean up temp file
             vim.fn.delete(tmp_file)
+            
+            -- Update the issue on Linear
+            local linear_nvim = require("linear-nvim")
+            local client = linear_nvim.client
+            
+            client:update_issue(issue_id, { description = updated_desc }, function(updated_issue)
+                if updated_issue then
+                    vim.notify("Issue description saved", vim.log.levels.INFO)
+                    -- Reopen the issue view with updated data
+                    vim.schedule(function()
+                        M.show_issue_in_buffer(updated_issue, options)
+                    end)
+                else
+                    vim.notify("Failed to save issue description", vim.log.levels.ERROR)
+                end
+            end)
         end
         
-        -- Map q and <Esc> to close
+        -- Map q and <Esc> to save and close
         vim.keymap.set('n', 'q', safe_quit, { buffer = edit_buf, silent = true })
         vim.keymap.set('n', '<Esc>', safe_quit, { buffer = edit_buf, silent = true })
         
