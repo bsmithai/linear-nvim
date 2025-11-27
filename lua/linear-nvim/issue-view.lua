@@ -288,14 +288,26 @@ function M.show_issue_in_buffer(issue, options)
         local lines_to_write = vim.split(current_desc, '\n', { plain = true })
         vim.fn.writefile(lines_to_write, tmp_file)
         
+        -- Check if there's already a buffer for this temp file and delete it
+        for _, buf in ipairs(vim.api.nvim_list_bufs()) do
+            if vim.api.nvim_buf_is_valid(buf) then
+                local buf_name = vim.api.nvim_buf_get_name(buf)
+                if buf_name == tmp_file then
+                    vim.api.nvim_buf_delete(buf, { force = true })
+                end
+            end
+        end
+        
         -- Create a buffer for editing
         local edit_buf = vim.api.nvim_create_buf(false, true)
-        vim.api.nvim_buf_set_option(edit_buf, 'buftype', '')
+        vim.api.nvim_buf_set_option(edit_buf, 'buftype', 'acwrite')
         vim.api.nvim_buf_set_option(edit_buf, 'filetype', 'markdown')
-        vim.api.nvim_buf_set_name(edit_buf, tmp_file)
+        vim.api.nvim_buf_set_option(edit_buf, 'bufhidden', 'wipe')
+        vim.api.nvim_buf_set_name(edit_buf, 'Linear: Edit Description')
         
         -- Set the buffer content
         vim.api.nvim_buf_set_lines(edit_buf, 0, -1, false, lines_to_write)
+        vim.api.nvim_buf_set_option(edit_buf, 'modified', false)
         
         -- Calculate floating window size
         local win_width = vim.api.nvim_get_option("columns")
@@ -352,9 +364,15 @@ function M.show_issue_in_buffer(issue, options)
         
         -- Set up a custom quit command that closes the floating window
         local function safe_quit()
+            -- Close the floating window
             if vim.api.nvim_win_is_valid(float_win) then
                 vim.api.nvim_win_close(float_win, true)
             end
+            -- Delete the buffer
+            if vim.api.nvim_buf_is_valid(edit_buf) then
+                vim.api.nvim_buf_delete(edit_buf, { force = true })
+            end
+            -- Clean up temp file
             vim.fn.delete(tmp_file)
         end
         
@@ -362,12 +380,15 @@ function M.show_issue_in_buffer(issue, options)
         vim.keymap.set('n', 'q', safe_quit, { buffer = edit_buf, silent = true })
         vim.keymap.set('n', '<Esc>', safe_quit, { buffer = edit_buf, silent = true })
         
-        -- Also clean up on BufUnload just in case
-        vim.api.nvim_create_autocmd('BufUnload', {
+        -- Also clean up on window close
+        vim.api.nvim_create_autocmd('WinClosed', {
             group = edit_group,
-            buffer = edit_buf,
+            pattern = tostring(float_win),
             callback = function()
                 vim.fn.delete(tmp_file)
+                if vim.api.nvim_buf_is_valid(edit_buf) then
+                    vim.api.nvim_buf_delete(edit_buf, { force = true })
+                end
             end,
         })
         
