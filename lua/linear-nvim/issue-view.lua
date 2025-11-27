@@ -177,6 +177,7 @@ function M.show_issue_in_buffer(issue, options)
                                     local tree = trees[1]
                                     local ok_query, query = pcall(vim.treesitter.query.get, code_lang, 'highlights')
                                     if ok_query and query then
+                                        local highlight_count = 0
                                         for id, node in query:iter_captures(tree:root(), code_text, 0, #code_block_lines) do
                                             local capture_name = query.captures[id]
                                             local start_row, start_col, end_row, end_col = node:range()
@@ -186,7 +187,7 @@ function M.show_issue_in_buffer(issue, options)
                                                 local hl_group = '@' .. capture_name .. '.' .. code_lang
                                                 local end_col_adjusted = start_row == end_row and (saved_indent_len + end_col) or -1
                                                 
-                                                pcall(vim.api.nvim_buf_add_highlight,
+                                                local ok_hl = pcall(vim.api.nvim_buf_add_highlight,
                                                     buf,
                                                     ui_ns_id,
                                                     hl_group,
@@ -194,10 +195,22 @@ function M.show_issue_in_buffer(issue, options)
                                                     saved_indent_len + start_col,
                                                     end_col_adjusted
                                                 )
+                                                if ok_hl then
+                                                    highlight_count = highlight_count + 1
+                                                end
                                             end
                                         end
+                                        if highlight_count == 0 then
+                                            vim.notify("No highlights applied for " .. code_lang .. " block", vim.log.levels.WARN)
+                                        end
+                                    else
+                                        vim.notify("No highlight query for " .. code_lang, vim.log.levels.WARN)
                                     end
+                                else
+                                    vim.notify("Failed to parse " .. code_lang .. " code", vim.log.levels.WARN)
                                 end
+                            else
+                                vim.notify("Failed to create parser for " .. code_lang, vim.log.levels.WARN)
                             end
                         end)
                     end
