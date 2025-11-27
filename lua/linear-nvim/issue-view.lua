@@ -323,13 +323,16 @@ function M.show_issue_in_buffer(issue, options)
         
         -- Set up autocmd to save on buffer write and update issue
         local edit_group = vim.api.nvim_create_augroup('LinearIssueDescEdit', { clear = true })
-        vim.api.nvim_create_autocmd('BufWritePost', {
+        vim.api.nvim_create_autocmd('BufWriteCmd', {
             group = edit_group,
-            buffer = vim.api.nvim_get_current_buf(),
+            buffer = edit_buf,
             callback = function()
                 -- Read the updated description
-                local updated_lines = vim.api.nvim_buf_get_lines(0, 0, -1, false)
+                local updated_lines = vim.api.nvim_buf_get_lines(edit_buf, 0, -1, false)
                 local updated_desc = table.concat(updated_lines, '\n')
+                
+                -- Write to temp file
+                vim.fn.writefile(updated_lines, tmp_file)
                 
                 -- Update the issue
                 local linear_nvim = require("linear-nvim")
@@ -338,6 +341,8 @@ function M.show_issue_in_buffer(issue, options)
                 client:update_issue(issue_id, { description = updated_desc }, function(updated_issue)
                     if updated_issue then
                         vim.notify("Issue description updated successfully", vim.log.levels.INFO)
+                        -- Mark buffer as saved
+                        vim.api.nvim_buf_set_option(edit_buf, 'modified', false)
                     else
                         vim.notify("Failed to update issue description", vim.log.levels.ERROR)
                     end
