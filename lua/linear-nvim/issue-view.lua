@@ -165,17 +165,18 @@ function M.show_issue_in_buffer(issue, options)
                         local saved_indent_len = indent_len
                         local saved_code_block_start = code_block_start
                         local saved_line_num = line_num
+                        local saved_code_lang = code_lang
                         local code_text = table.concat(code_block_lines, "\n")
                         
                         vim.schedule(function()
                             if not vim.api.nvim_buf_is_valid(buf) then return end
                             
-                            local ok, parser = pcall(vim.treesitter.get_string_parser, code_text, code_lang)
+                            local ok, parser = pcall(vim.treesitter.get_string_parser, code_text, saved_code_lang)
                             if ok and parser then
                                 local ok_parse, trees = pcall(function() return parser:parse() end)
                                 if ok_parse and trees and trees[1] then
                                     local tree = trees[1]
-                                    local ok_query, query = pcall(vim.treesitter.query.get, code_lang, 'highlights')
+                                    local ok_query, query = pcall(vim.treesitter.query.get, saved_code_lang, 'highlights')
                                     if ok_query and query then
                                         local highlight_count = 0
                                         for id, node in query:iter_captures(tree:root(), code_text, 0, #code_block_lines) do
@@ -184,7 +185,7 @@ function M.show_issue_in_buffer(issue, options)
                                             
                                             local actual_line_num = saved_code_block_start + 1 + start_row
                                             if actual_line_num < saved_line_num then
-                                                local hl_group = '@' .. capture_name .. '.' .. code_lang
+                                                local hl_group = '@' .. capture_name .. '.' .. saved_code_lang
                                                 local end_col_adjusted = start_row == end_row and (saved_indent_len + end_col) or -1
                                                 
                                                 local ok_hl = pcall(vim.api.nvim_buf_add_highlight,
@@ -201,16 +202,16 @@ function M.show_issue_in_buffer(issue, options)
                                             end
                                         end
                                         if highlight_count == 0 then
-                                            vim.notify("No highlights applied for " .. code_lang .. " block", vim.log.levels.WARN)
+                                            vim.notify("No highlights applied for " .. saved_code_lang .. " block", vim.log.levels.WARN)
                                         end
                                     else
-                                        vim.notify("No highlight query for " .. code_lang, vim.log.levels.WARN)
+                                        vim.notify("No highlight query for " .. saved_code_lang, vim.log.levels.WARN)
                                     end
                                 else
-                                    vim.notify("Failed to parse " .. code_lang .. " code", vim.log.levels.WARN)
+                                    vim.notify("Failed to parse " .. saved_code_lang .. " code", vim.log.levels.WARN)
                                 end
                             else
-                                vim.notify("Failed to create parser for " .. code_lang, vim.log.levels.WARN)
+                                vim.notify("Failed to create parser for " .. saved_code_lang, vim.log.levels.WARN)
                             end
                         end)
                     end
