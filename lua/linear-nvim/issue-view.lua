@@ -288,8 +288,10 @@ function M.show_issue_in_buffer(issue, options)
         local lines_to_write = vim.split(current_desc, '\n', { plain = true })
         vim.fn.writefile(lines_to_write, tmp_file)
         
-        -- Save current buffer to return to
-        local return_buf = vim.api.nvim_get_current_buf()
+        -- Get list of valid buffers before opening temp file
+        local bufs = vim.tbl_filter(function(b)
+            return vim.api.nvim_buf_is_valid(b) and vim.bo[b].buflisted
+        end, vim.api.nvim_list_bufs())
         
         -- Open in a new buffer (in current window)
         vim.cmd('edit ' .. vim.fn.fnameescape(tmp_file))
@@ -325,10 +327,17 @@ function M.show_issue_in_buffer(issue, options)
             buffer = edit_buf,
             callback = function()
                 vim.fn.delete(tmp_file)
-                -- Try to switch to the return buffer if it's still valid
-                if vim.api.nvim_buf_is_valid(return_buf) then
-                    vim.cmd('buffer ' .. return_buf)
+                -- Try to switch to a valid buffer from before
+                if #bufs > 0 then
+                    for _, b in ipairs(bufs) do
+                        if vim.api.nvim_buf_is_valid(b) and vim.bo[b].buflisted then
+                            vim.cmd('buffer ' .. b)
+                            return
+                        end
+                    end
                 end
+                -- If no valid buffer, open an empty one
+                vim.cmd('enew')
             end,
         })
         
