@@ -424,7 +424,7 @@ function LinearClient:update_issue(issue_id, updates, callback)
     local updates_string = table.concat(update_fields, " ")
     
     local query = string.format(
-        '{"query": "mutation IssueUpdate { issueUpdate(id: \\"%s\\" input: {%s}) { success issue { %s } } }"}',
+        '{"query": "mutation IssueUpdate { issueUpdate(id: \\"%s\\" input: {%s}) { success issue { id %s state { id name } assignee { id name } labels { nodes { id name color }} project { id name } } } }"}',
         issue_id,
         updates_string,
         issue_fields_query
