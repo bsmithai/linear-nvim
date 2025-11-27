@@ -288,8 +288,12 @@ function M.show_issue_in_buffer(issue, options)
         local lines_to_write = vim.split(current_desc, '\n', { plain = true })
         vim.fn.writefile(lines_to_write, tmp_file)
         
-        -- Open in a new buffer
-        vim.cmd('edit ' .. tmp_file)
+        -- Save current buffer to return to
+        local return_buf = vim.api.nvim_get_current_buf()
+        
+        -- Open in a new buffer (in current window)
+        vim.cmd('edit ' .. vim.fn.fnameescape(tmp_file))
+        local edit_buf = vim.api.nvim_get_current_buf()
         
         -- Set up autocmd to save on buffer write and update issue
         local edit_group = vim.api.nvim_create_augroup('LinearIssueDescEdit', { clear = true })
@@ -315,12 +319,16 @@ function M.show_issue_in_buffer(issue, options)
             end,
         })
         
-        -- Clean up temp file on buffer close
+        -- Clean up temp file on buffer close and return to previous buffer
         vim.api.nvim_create_autocmd('BufDelete', {
             group = edit_group,
-            buffer = vim.api.nvim_get_current_buf(),
+            buffer = edit_buf,
             callback = function()
                 vim.fn.delete(tmp_file)
+                -- Try to switch to the return buffer if it's still valid
+                if vim.api.nvim_buf_is_valid(return_buf) then
+                    vim.cmd('buffer ' .. return_buf)
+                end
             end,
         })
         
