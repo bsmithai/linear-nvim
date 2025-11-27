@@ -26,7 +26,8 @@ function M.show_issue_in_buffer(issue, options)
     table.insert(highlights, {line = #lines - 1, col_start = 2, col_end = 2 + #(issue.title or ""), hl_group = "Title"})
     
     table.insert(lines, "")
-    table.insert(lines, "  ───────────────────────────────────────────────────────────────────")
+    local separator_line_1 = #lines
+    table.insert(lines, "")
     table.insert(lines, "")
     
     -- Properties section
@@ -91,7 +92,8 @@ function M.show_issue_in_buffer(issue, options)
     end
     
     table.insert(lines, "")
-    table.insert(lines, "  ───────────────────────────────────────────────────────────────────")
+    local separator_line_2 = #lines
+    table.insert(lines, "")
     table.insert(lines, "")
     
     -- Description section
@@ -216,12 +218,26 @@ function M.show_issue_in_buffer(issue, options)
     -- Make buffer read-only
     vim.api.nvim_buf_set_option(buf, 'modifiable', false)
     
+    -- Function to update separator lines based on window width
+    local function update_separators(win_width)
+        local width = math.min(100, math.floor(win_width * 0.8))
+        local separator = "  " .. string.rep("─", width - 4)
+        
+        vim.api.nvim_buf_set_option(buf, 'modifiable', true)
+        vim.api.nvim_buf_set_lines(buf, separator_line_1, separator_line_1 + 1, false, {separator})
+        vim.api.nvim_buf_set_lines(buf, separator_line_2, separator_line_2 + 1, false, {separator})
+        vim.api.nvim_buf_set_option(buf, 'modifiable', false)
+    end
+    
     -- Function to calculate window size and position
     local function get_window_config()
         local win_width = vim.api.nvim_get_option("columns")
         local win_height = vim.api.nvim_get_option("lines")
         
         local width = math.min(100, math.floor(win_width * 0.8))
+        
+        -- Update separators for current width
+        update_separators(win_width)
         
         -- Calculate height based on content, with max limits
         local content_height = #lines
