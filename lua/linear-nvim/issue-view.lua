@@ -262,14 +262,14 @@ function M.show_issue_in_buffer(issue, options)
     end
     
     local function edit_description()
-        close_window()
-        
-        -- Capture the issue ID before closing
+        -- Capture the issue ID BEFORE closing
         local issue_id = issue.id
         if not issue_id or issue_id == vim.NIL then
             vim.notify("Error: Issue ID not found", vim.log.levels.ERROR)
             return
         end
+        
+        close_window()
         
         -- Create a temporary markdown file
         local tmp_file = vim.fn.tempname() .. '.md'
