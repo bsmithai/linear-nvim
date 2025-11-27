@@ -582,6 +582,17 @@ function M.show_issue_in_buffer(issue, options)
         vim.api.nvim_win_set_option(float_win, 'wrap', true)
         vim.api.nvim_win_set_option(float_win, 'linebreak', true)
         
+        local has_obsidian = pcall(require, "obsidian")
+        if has_obsidian then
+            vim.keymap.set('n', '<leader>ch', function()
+                return require("obsidian").util.toggle_checkbox()
+            end, { buffer = edit_buf, silent = true })
+            
+            vim.keymap.set('n', '<cr>', function()
+                return require("obsidian").util.smart_action()
+            end, { buffer = edit_buf, silent = true, expr = true })
+        end
+        
         local edit_group = vim.api.nvim_create_augroup('LinearIssueDescEdit', { clear = true })
         vim.api.nvim_create_autocmd('BufWritePost', {
             group = edit_group,
