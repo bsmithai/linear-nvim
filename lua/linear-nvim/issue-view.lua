@@ -7,7 +7,7 @@ function M.show_issue_in_buffer(issue, options)
     
     vim.api.nvim_buf_set_option(buf, 'buftype', 'nofile')
     vim.api.nvim_buf_set_option(buf, 'swapfile', false)
-    vim.api.nvim_buf_set_option(buf, 'filetype', 'markdown')
+    vim.api.nvim_buf_set_option(buf, 'filetype', 'linear-issue')
     vim.api.nvim_buf_set_option(buf, 'bufhidden', 'wipe')
     
     local lines = {}
@@ -131,131 +131,35 @@ function M.show_issue_in_buffer(issue, options)
     end
     
     if desc_start_line then
-        local has_obsidian_ui, obsidian_ui = pcall(require, "obsidian.ui")
-        local has_obsidian, obsidian = pcall(require, "obsidian")
+        local ui_ns_id = vim.api.nvim_create_namespace('linear_markdown_ui')
+        local lines_content = vim.api.nvim_buf_get_lines(buf, desc_start_line, -1, false)
         
-        if has_obsidian_ui and has_obsidian and obsidian.get_client then
-            local client = obsidian.get_client()
-            if client and client.opts and client.opts.ui and client.opts.ui.enable then
-                local ui_ns_id = vim.api.nvim_create_namespace('linear_markdown_ui')
-                local lines_content = vim.api.nvim_buf_get_lines(buf, desc_start_line, -1, false)
-                
-                for i, line in ipairs(lines_content) do
-                    local line_num = desc_start_line + i - 1
-                    local actual_line = line:match("^%s*(.*)") or line
-                    local indent_len = #line - #actual_line
-                    
-                    local unchecked = actual_line:find("%- %[ %]")
-                    if unchecked then
-                        vim.api.nvim_buf_set_extmark(buf, ui_ns_id, line_num, indent_len + unchecked - 1, {
-                            end_col = indent_len + unchecked + 4,
-                            virt_text = {{"□ ", "LinearMdTodo"}},
-                            virt_text_pos = "overlay",
-                            hl_mode = "combine",
-                        })
-                    end
-                    
-                    local checked = actual_line:find("%- %[x%]") or actual_line:find("%- %[X%]")
-                    if checked then
-                        vim.api.nvim_buf_set_extmark(buf, ui_ns_id, line_num, indent_len + checked - 1, {
-                            end_col = indent_len + checked + 4,
-                            virt_text = {{"✔ ", "LinearMdDone"}},
-                            virt_text_pos = "overlay",
-                            hl_mode = "combine",
-                        })
-                    end
-                    
-                    local bullet_dash = actual_line:match("^%s*%- ")
-                    if bullet_dash and not actual_line:find("%- %[") then
-                        local dash_pos = actual_line:find("%-")
-                        if dash_pos then
-                            vim.api.nvim_buf_set_extmark(buf, ui_ns_id, line_num, indent_len + dash_pos - 1, {
-                                end_col = indent_len + dash_pos,
-                                virt_text = {{"•", "LinearMdBullet"}},
-                                virt_text_pos = "overlay",
-                                hl_mode = "combine",
-                            })
-                        end
-                    end
-                    
-                    local bullet_star = actual_line:match("^%s*%* ")
-                    if bullet_star and not actual_line:find("%* %[") then
-                        local star_pos = actual_line:find("%*")
-                        if star_pos then
-                            vim.api.nvim_buf_set_extmark(buf, ui_ns_id, line_num, indent_len + star_pos - 1, {
-                                end_col = indent_len + star_pos,
-                                virt_text = {{"•", "LinearMdBullet"}},
-                                virt_text_pos = "overlay",
-                                hl_mode = "combine",
-                            })
-                        end
-                    end
-                end
-            else
-                local ui_ns_id = vim.api.nvim_create_namespace('linear_markdown_ui')
-                local lines_content = vim.api.nvim_buf_get_lines(buf, desc_start_line, -1, false)
-                
-                for i, line in ipairs(lines_content) do
-                    local line_num = desc_start_line + i - 1
-                    local actual_line = line:match("^%s*(.*)") or line
-                    local indent_len = #line - #actual_line
-                    
-                    local unchecked = actual_line:find("%- %[ %]")
-                    if unchecked then
-                        vim.api.nvim_buf_set_extmark(buf, ui_ns_id, line_num, indent_len + unchecked - 1, {
-                            end_col = indent_len + unchecked + 4,
-                            virt_text = {{"□ ", "LinearMdTodo"}},
-                            virt_text_pos = "overlay",
-                            hl_mode = "combine",
-                        })
-                    end
-                    
-                    local checked = actual_line:find("%- %[x%]") or actual_line:find("%- %[X%]")
-                    if checked then
-                        vim.api.nvim_buf_set_extmark(buf, ui_ns_id, line_num, indent_len + checked - 1, {
-                            end_col = indent_len + checked + 4,
-                            virt_text = {{"✔ ", "LinearMdDone"}},
-                            virt_text_pos = "overlay",
-                            hl_mode = "combine",
-                        })
-                    end
-                    
-                    local bullet_dash = actual_line:match("^%s*%- ")
-                    if bullet_dash and not actual_line:find("%- %[") then
-                        local dash_pos = actual_line:find("%-")
-                        if dash_pos then
-                            vim.api.nvim_buf_set_extmark(buf, ui_ns_id, line_num, indent_len + dash_pos - 1, {
-                                end_col = indent_len + dash_pos,
-                                virt_text = {{"•", "LinearMdBullet"}},
-                                virt_text_pos = "overlay",
-                                hl_mode = "combine",
-                            })
-                        end
-                    end
-                    
-                    local bullet_star = actual_line:match("^%s*%* ")
-                    if bullet_star and not actual_line:find("%* %[") then
-                        local star_pos = actual_line:find("%*")
-                        if star_pos then
-                            vim.api.nvim_buf_set_extmark(buf, ui_ns_id, line_num, indent_len + star_pos - 1, {
-                                end_col = indent_len + star_pos,
-                                virt_text = {{"•", "LinearMdBullet"}},
-                                virt_text_pos = "overlay",
-                                hl_mode = "combine",
-                            })
-                        end
-                    end
-                end
-            end
-        else
-            local ui_ns_id = vim.api.nvim_create_namespace('linear_markdown_ui')
-            local lines_content = vim.api.nvim_buf_get_lines(buf, desc_start_line, -1, false)
+        local in_code_block = false
+        local code_lang = nil
+        
+        for i, line in ipairs(lines_content) do
+            local line_num = desc_start_line + i - 1
+            local actual_line = line:match("^%s*(.*)") or line
+            local indent_len = #line - #actual_line
             
-            for i, line in ipairs(lines_content) do
-                local line_num = desc_start_line + i - 1
-                local actual_line = line:match("^%s*(.*)") or line
-                local indent_len = #line - #actual_line
-                
+            if actual_line:match("^```") then
+                in_code_block = not in_code_block
+                if in_code_block then
+                    code_lang = actual_line:match("^```(%w+)")
+                    vim.api.nvim_buf_set_extmark(buf, ui_ns_id, line_num, indent_len, {
+                        end_col = #line,
+                        conceal = "",
+                    })
+                else
+                    code_lang = nil
+                    vim.api.nvim_buf_set_extmark(buf, ui_ns_id, line_num, indent_len, {
+                        end_col = #line,
+                        conceal = "",
+                    })
+                end
+            elseif in_code_block then
+                vim.api.nvim_buf_add_highlight(buf, ui_ns_id, "String", line_num, indent_len, #line)
+            else
                 local unchecked = actual_line:find("%- %[ %]")
                 if unchecked then
                     vim.api.nvim_buf_set_extmark(buf, ui_ns_id, line_num, indent_len + unchecked - 1, {
@@ -300,6 +204,26 @@ function M.show_issue_in_buffer(issue, options)
                             hl_mode = "combine",
                         })
                     end
+                end
+                
+                local inline_start = 1
+                while true do
+                    local code_start = actual_line:find("`", inline_start, true)
+                    if not code_start then break end
+                    local code_end = actual_line:find("`", code_start + 1, true)
+                    if not code_end then break end
+                    
+                    vim.api.nvim_buf_set_extmark(buf, ui_ns_id, line_num, indent_len + code_start - 1, {
+                        end_col = indent_len + code_start,
+                        conceal = "",
+                    })
+                    vim.api.nvim_buf_set_extmark(buf, ui_ns_id, line_num, indent_len + code_end - 1, {
+                        end_col = indent_len + code_end,
+                        conceal = "",
+                    })
+                    vim.api.nvim_buf_add_highlight(buf, ui_ns_id, "String", line_num, indent_len + code_start, indent_len + code_end)
+                    
+                    inline_start = code_end + 1
                 end
             end
         end
