@@ -201,7 +201,7 @@ function M.show_issue_in_buffer(issue, options)
     
     table.insert(lines, "")
     table.insert(lines, "")
-    table.insert(lines, "  Press 'q' to close | 'o' to open in browser | 'e' to edit description | 'l' to edit labels")
+    table.insert(lines, "  Press 'q' to close | 'o' to open in browser | 'e' to edit description")
     table.insert(highlights, {line = #lines - 1, col_start = 2, col_end = #lines[#lines], hl_group = "Comment"})
     
     -- Set buffer content
