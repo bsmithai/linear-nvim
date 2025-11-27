@@ -426,16 +426,30 @@ function LinearClient:update_issue(issue_id, updates, callback)
     
     local data = self._make_query(self:fetch_api_key(), query)
     
+    if not data then
+        vim.notify("Failed to update issue - no response", vim.log.levels.ERROR)
+        callback(nil)
+        return
+    end
+    
+    if data.errors then
+        local error_msg = data.errors[1] and data.errors[1].message or "Unknown error"
+        vim.notify("Failed to update issue: " .. error_msg, vim.log.levels.ERROR)
+        log.error(string.format("GraphQL errors: %s", vim.inspect(data.errors)))
+        callback(nil)
+        return
+    end
+    
     if
-        data
-        and data.data
+        data.data
         and data.data.issueUpdate
         and data.data.issueUpdate.success
         and data.data.issueUpdate.issue
     then
         callback(data.data.issueUpdate.issue)
     else
-        vim.notify("Failed to update issue", vim.log.levels.ERROR)
+        vim.notify("Failed to update issue - unexpected response", vim.log.levels.ERROR)
+        log.error(string.format("Unexpected response: %s", vim.inspect(data)))
         callback(nil)
     end
 end
