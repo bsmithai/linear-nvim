@@ -94,92 +94,17 @@ function M.show_issue_in_buffer(issue, options)
     table.insert(lines, "")
     
     -- Description section
+    local desc_start_line = nil
     if issue.description and issue.description ~= vim.NIL and issue.description ~= "" then
         table.insert(lines, "  Description")
         table.insert(highlights, {line = #lines - 1, col_start = 2, col_end = 13, hl_group = "Special"})
         table.insert(lines, "")
         
-        -- Parse and render markdown with virtual text replacements
+        desc_start_line = #lines
+        
         for desc_line in issue.description:gmatch("[^\r\n]+") do
-            local line_start = #lines
-            local rendered_line = desc_line
-            
-            -- Replace checkbox syntax with pretty characters
-            rendered_line = rendered_line:gsub("%- %[X%]", "- ✔")
-            rendered_line = rendered_line:gsub("%- %[x%]", "- ✔")
-            rendered_line = rendered_line:gsub("%- %[ %]", "- □")
-            
-            -- Replace bullet points with prettier bullets
-            rendered_line = rendered_line:gsub("^%s*%-%s", function(match)
-                return match:gsub("%-", "•")
-            end)
-            rendered_line = rendered_line:gsub("^%s*%*%s", function(match)
-                return match:gsub("%*", "•")
-            end)
-            
-            local indented_line = "    " .. rendered_line
+            local indented_line = "    " .. desc_line
             table.insert(lines, indented_line)
-            
-            -- Highlight markdown headers (###, ##, #)
-            if desc_line:match("^###%s") then
-                table.insert(highlights, {line = line_start, col_start = 4, col_end = 7, hl_group = "Comment"})
-                table.insert(highlights, {line = line_start, col_start = 8, col_end = #indented_line, hl_group = "Title"})
-            elseif desc_line:match("^##%s") then
-                table.insert(highlights, {line = line_start, col_start = 4, col_end = 6, hl_group = "Comment"})
-                table.insert(highlights, {line = line_start, col_start = 7, col_end = #indented_line, hl_group = "Title"})
-            elseif desc_line:match("^#%s") then
-                table.insert(highlights, {line = line_start, col_start = 4, col_end = 5, hl_group = "Comment"})
-                table.insert(highlights, {line = line_start, col_start = 6, col_end = #indented_line, hl_group = "Title"})
-            end
-            
-            -- Highlight checkboxes
-            if rendered_line:match("✔") then
-                local checkbox_pos = rendered_line:find("✔")
-                if checkbox_pos then
-                    table.insert(highlights, {line = line_start, col_start = 4 + checkbox_pos - 1, col_end = 4 + checkbox_pos + 2, hl_group = "String"})
-                end
-            end
-            if rendered_line:match("□") then
-                local checkbox_pos = rendered_line:find("□")
-                if checkbox_pos then
-                    table.insert(highlights, {line = line_start, col_start = 4 + checkbox_pos - 1, col_end = 4 + checkbox_pos + 2, hl_group = "Comment"})
-                end
-            end
-            
-            -- Highlight bullet points
-            if rendered_line:match("^%s*•%s") then
-                local bullet_pos = rendered_line:find("•")
-                if bullet_pos then
-                    table.insert(highlights, {line = line_start, col_start = 4 + bullet_pos - 1, col_end = 4 + bullet_pos + 2, hl_group = "Special"})
-                end
-            end
-            
-            local bold_start = rendered_line:find("%*%*")
-            while bold_start do
-                local bold_end = rendered_line:find("%*%*", bold_start + 2)
-                if bold_end then
-                    local before = rendered_line:sub(1, bold_start - 1)
-                    local bold_text = rendered_line:sub(bold_start + 2, bold_end - 1)
-                    local after = rendered_line:sub(bold_end + 2)
-                    rendered_line = before .. bold_text .. after
-                    
-                    lines[#lines] = "    " .. rendered_line
-                    indented_line = lines[#lines]
-                    
-                    table.insert(highlights, {line = line_start, col_start = 4 + #before, col_end = 4 + #before + #bold_text, hl_group = "Bold"})
-                    
-                    bold_start = rendered_line:find("%*%*")
-                else
-                    break
-                end
-            end
-            
-            for code_text in rendered_line:gmatch("`([^`]+)`") do
-                local start_pos = rendered_line:find("`" .. code_text:gsub("[%^%$%(%)%%%.%[%]%*%+%-%?]", "%%%1") .. "`")
-                if start_pos then
-                    table.insert(highlights, {line = line_start, col_start = 4 + start_pos - 1, col_end = 4 + start_pos + #code_text + 1, hl_group = "String"})
-                end
-            end
         end
         
         table.insert(lines, "")
@@ -203,6 +128,181 @@ function M.show_issue_in_buffer(issue, options)
     local ns_id = vim.api.nvim_create_namespace('linear_issue_view')
     for _, hl in ipairs(highlights) do
         vim.api.nvim_buf_add_highlight(buf, ns_id, hl.hl_group, hl.line, hl.col_start, hl.col_end)
+    end
+    
+    if desc_start_line then
+        local has_obsidian_ui, obsidian_ui = pcall(require, "obsidian.ui")
+        local has_obsidian, obsidian = pcall(require, "obsidian")
+        
+        if has_obsidian_ui and has_obsidian and obsidian.get_client then
+            local client = obsidian.get_client()
+            if client and client.opts and client.opts.ui and client.opts.ui.enable then
+                local ui_ns_id = vim.api.nvim_create_namespace('linear_markdown_ui')
+                local lines_content = vim.api.nvim_buf_get_lines(buf, desc_start_line, -1, false)
+                
+                for i, line in ipairs(lines_content) do
+                    local line_num = desc_start_line + i - 1
+                    local actual_line = line:match("^%s*(.*)") or line
+                    local indent_len = #line - #actual_line
+                    
+                    local unchecked = actual_line:find("%- %[ %]")
+                    if unchecked then
+                        vim.api.nvim_buf_set_extmark(buf, ui_ns_id, line_num, indent_len + unchecked - 1, {
+                            end_col = indent_len + unchecked + 4,
+                            virt_text = {{"□ ", "LinearMdTodo"}},
+                            virt_text_pos = "overlay",
+                            hl_mode = "combine",
+                        })
+                    end
+                    
+                    local checked = actual_line:find("%- %[x%]") or actual_line:find("%- %[X%]")
+                    if checked then
+                        vim.api.nvim_buf_set_extmark(buf, ui_ns_id, line_num, indent_len + checked - 1, {
+                            end_col = indent_len + checked + 4,
+                            virt_text = {{"✔ ", "LinearMdDone"}},
+                            virt_text_pos = "overlay",
+                            hl_mode = "combine",
+                        })
+                    end
+                    
+                    local bullet_dash = actual_line:match("^%s*%- ")
+                    if bullet_dash and not actual_line:find("%- %[") then
+                        local dash_pos = actual_line:find("%-")
+                        if dash_pos then
+                            vim.api.nvim_buf_set_extmark(buf, ui_ns_id, line_num, indent_len + dash_pos - 1, {
+                                end_col = indent_len + dash_pos,
+                                virt_text = {{"•", "LinearMdBullet"}},
+                                virt_text_pos = "overlay",
+                                hl_mode = "combine",
+                            })
+                        end
+                    end
+                    
+                    local bullet_star = actual_line:match("^%s*%* ")
+                    if bullet_star and not actual_line:find("%* %[") then
+                        local star_pos = actual_line:find("%*")
+                        if star_pos then
+                            vim.api.nvim_buf_set_extmark(buf, ui_ns_id, line_num, indent_len + star_pos - 1, {
+                                end_col = indent_len + star_pos,
+                                virt_text = {{"•", "LinearMdBullet"}},
+                                virt_text_pos = "overlay",
+                                hl_mode = "combine",
+                            })
+                        end
+                    end
+                end
+            else
+                local ui_ns_id = vim.api.nvim_create_namespace('linear_markdown_ui')
+                local lines_content = vim.api.nvim_buf_get_lines(buf, desc_start_line, -1, false)
+                
+                for i, line in ipairs(lines_content) do
+                    local line_num = desc_start_line + i - 1
+                    local actual_line = line:match("^%s*(.*)") or line
+                    local indent_len = #line - #actual_line
+                    
+                    local unchecked = actual_line:find("%- %[ %]")
+                    if unchecked then
+                        vim.api.nvim_buf_set_extmark(buf, ui_ns_id, line_num, indent_len + unchecked - 1, {
+                            end_col = indent_len + unchecked + 4,
+                            virt_text = {{"□ ", "LinearMdTodo"}},
+                            virt_text_pos = "overlay",
+                            hl_mode = "combine",
+                        })
+                    end
+                    
+                    local checked = actual_line:find("%- %[x%]") or actual_line:find("%- %[X%]")
+                    if checked then
+                        vim.api.nvim_buf_set_extmark(buf, ui_ns_id, line_num, indent_len + checked - 1, {
+                            end_col = indent_len + checked + 4,
+                            virt_text = {{"✔ ", "LinearMdDone"}},
+                            virt_text_pos = "overlay",
+                            hl_mode = "combine",
+                        })
+                    end
+                    
+                    local bullet_dash = actual_line:match("^%s*%- ")
+                    if bullet_dash and not actual_line:find("%- %[") then
+                        local dash_pos = actual_line:find("%-")
+                        if dash_pos then
+                            vim.api.nvim_buf_set_extmark(buf, ui_ns_id, line_num, indent_len + dash_pos - 1, {
+                                end_col = indent_len + dash_pos,
+                                virt_text = {{"•", "LinearMdBullet"}},
+                                virt_text_pos = "overlay",
+                                hl_mode = "combine",
+                            })
+                        end
+                    end
+                    
+                    local bullet_star = actual_line:match("^%s*%* ")
+                    if bullet_star and not actual_line:find("%* %[") then
+                        local star_pos = actual_line:find("%*")
+                        if star_pos then
+                            vim.api.nvim_buf_set_extmark(buf, ui_ns_id, line_num, indent_len + star_pos - 1, {
+                                end_col = indent_len + star_pos,
+                                virt_text = {{"•", "LinearMdBullet"}},
+                                virt_text_pos = "overlay",
+                                hl_mode = "combine",
+                            })
+                        end
+                    end
+                end
+            end
+        else
+            local ui_ns_id = vim.api.nvim_create_namespace('linear_markdown_ui')
+            local lines_content = vim.api.nvim_buf_get_lines(buf, desc_start_line, -1, false)
+            
+            for i, line in ipairs(lines_content) do
+                local line_num = desc_start_line + i - 1
+                local actual_line = line:match("^%s*(.*)") or line
+                local indent_len = #line - #actual_line
+                
+                local unchecked = actual_line:find("%- %[ %]")
+                if unchecked then
+                    vim.api.nvim_buf_set_extmark(buf, ui_ns_id, line_num, indent_len + unchecked - 1, {
+                        end_col = indent_len + unchecked + 4,
+                        virt_text = {{"□ ", "LinearMdTodo"}},
+                        virt_text_pos = "overlay",
+                        hl_mode = "combine",
+                    })
+                end
+                
+                local checked = actual_line:find("%- %[x%]") or actual_line:find("%- %[X%]")
+                if checked then
+                    vim.api.nvim_buf_set_extmark(buf, ui_ns_id, line_num, indent_len + checked - 1, {
+                        end_col = indent_len + checked + 4,
+                        virt_text = {{"✔ ", "LinearMdDone"}},
+                        virt_text_pos = "overlay",
+                        hl_mode = "combine",
+                    })
+                end
+                
+                local bullet_dash = actual_line:match("^%s*%- ")
+                if bullet_dash and not actual_line:find("%- %[") then
+                    local dash_pos = actual_line:find("%-")
+                    if dash_pos then
+                        vim.api.nvim_buf_set_extmark(buf, ui_ns_id, line_num, indent_len + dash_pos - 1, {
+                            end_col = indent_len + dash_pos,
+                            virt_text = {{"•", "LinearMdBullet"}},
+                            virt_text_pos = "overlay",
+                            hl_mode = "combine",
+                        })
+                    end
+                end
+                
+                local bullet_star = actual_line:match("^%s*%* ")
+                if bullet_star and not actual_line:find("%* %[") then
+                    local star_pos = actual_line:find("%*")
+                    if star_pos then
+                        vim.api.nvim_buf_set_extmark(buf, ui_ns_id, line_num, indent_len + star_pos - 1, {
+                            end_col = indent_len + star_pos,
+                            virt_text = {{"•", "LinearMdBullet"}},
+                            virt_text_pos = "overlay",
+                            hl_mode = "combine",
+                        })
+                    end
+                end
+            end
+        end
     end
     
     -- Make buffer read-only
