@@ -263,7 +263,9 @@ function M.show_issue_in_buffer(issue, options)
                     })
                 end
                 
-                local checked = actual_line:find("%- %[x%]") or actual_line:find("%- %[X%]")
+                local checked_lower = actual_line:find("%- %[x%]")
+                local checked_upper = actual_line:find("%- %[X%]")
+                local checked = checked_lower or checked_upper
                 if checked then
                     vim.api.nvim_buf_set_extmark(buf, ui_ns_id, line_num, indent_len + checked - 1, {
                         end_col = indent_len + checked + 4,
