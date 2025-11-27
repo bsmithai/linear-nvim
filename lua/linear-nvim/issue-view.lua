@@ -294,6 +294,88 @@ function M.show_issue_in_buffer(issue, options)
         end
     end
     
+    local function setup_markdown_ui(buf)
+        local ns_id = vim.api.nvim_create_namespace('linear_markdown_ui')
+        
+        local hl_groups = {
+            LinearMdTodo = { bold = true, fg = "#f78c6c" },
+            LinearMdDone = { bold = true, fg = "#89ddff" },
+            LinearMdBullet = { bold = true, fg = "#89ddff" },
+            LinearMdImportant = { bold = true, fg = "#d73128" },
+        }
+        
+        for name, opts in pairs(hl_groups) do
+            vim.api.nvim_set_hl(0, name, opts)
+        end
+        
+        local function render_markdown()
+            vim.api.nvim_buf_clear_namespace(buf, ns_id, 0, -1)
+            
+            local lines = vim.api.nvim_buf_get_lines(buf, 0, -1, false)
+            
+            for i, line in ipairs(lines) do
+                local line_num = i - 1
+                
+                local unchecked = line:find("%- %[ %]")
+                if unchecked then
+                    vim.api.nvim_buf_set_extmark(buf, ns_id, line_num, unchecked - 1, {
+                        end_col = unchecked + 4,
+                        virt_text = {{"□ ", "LinearMdTodo"}},
+                        virt_text_pos = "overlay",
+                        hl_mode = "combine",
+                    })
+                end
+                
+                local checked = line:find("%- %[x%]") or line:find("%- %[X%]")
+                if checked then
+                    vim.api.nvim_buf_set_extmark(buf, ns_id, line_num, checked - 1, {
+                        end_col = checked + 4,
+                        virt_text = {{"✔ ", "LinearMdDone"}},
+                        virt_text_pos = "overlay",
+                        hl_mode = "combine",
+                    })
+                end
+                
+                local bullet_dash = line:match("^(%s*)%- ")
+                if bullet_dash and not line:find("%- %[") then
+                    local indent = #bullet_dash
+                    local dash_pos = line:find("%-")
+                    if dash_pos then
+                        vim.api.nvim_buf_set_extmark(buf, ns_id, line_num, dash_pos - 1, {
+                            end_col = dash_pos,
+                            virt_text = {{"•", "LinearMdBullet"}},
+                            virt_text_pos = "overlay",
+                            hl_mode = "combine",
+                        })
+                    end
+                end
+                
+                local bullet_star = line:match("^(%s*)%* ")
+                if bullet_star and not line:find("%* %[") then
+                    local indent = #bullet_star
+                    local star_pos = line:find("%*")
+                    if star_pos then
+                        vim.api.nvim_buf_set_extmark(buf, ns_id, line_num, star_pos - 1, {
+                            end_col = star_pos,
+                            virt_text = {{"•", "LinearMdBullet"}},
+                            virt_text_pos = "overlay",
+                            hl_mode = "combine",
+                        })
+                    end
+                end
+            end
+        end
+        
+        render_markdown()
+        
+        vim.api.nvim_create_autocmd({'TextChanged', 'TextChangedI'}, {
+            buffer = buf,
+            callback = function()
+                render_markdown()
+            end,
+        })
+    end
+    
     local function edit_description()
         local log = require("plenary.log")
         log.debug("Issue object: " .. vim.inspect(issue))
@@ -335,6 +417,22 @@ function M.show_issue_in_buffer(issue, options)
         
         vim.api.nvim_buf_set_lines(edit_buf, 0, -1, false, lines_to_write)
         vim.api.nvim_buf_set_option(edit_buf, 'modified', false)
+        
+        local has_obsidian, obsidian = pcall(require, "obsidian")
+        if has_obsidian and obsidian.get_client then
+            local client = obsidian.get_client()
+            if client and client.opts and client.opts.ui and client.opts.ui.enable then
+                vim.api.nvim_buf_call(edit_buf, function()
+                    if client.apply_ui_to_buf then
+                        client:apply_ui_to_buf(edit_buf)
+                    end
+                end)
+            else
+                setup_markdown_ui(edit_buf)
+            end
+        else
+            setup_markdown_ui(edit_buf)
+        end
         
         local win_width = vim.api.nvim_get_option("columns")
         local win_height = vim.api.nvim_get_option("lines")
