@@ -178,17 +178,40 @@ function M.show_issue_in_buffer(issue, options)
                                     local tree = trees[1]
                                     local ok_query, query = pcall(vim.treesitter.query.get, saved_code_lang, 'highlights')
                                     if ok_query and query then
-                                        local highlight_count = 0
+                                        local captures = {}
                                         for id, node in query:iter_captures(tree:root(), code_text, 0, #code_block_lines) do
                                             local capture_name = query.captures[id]
                                             local start_row, start_col, end_row, end_col = node:range()
+                                            table.insert(captures, {
+                                                name = capture_name,
+                                                start_row = start_row,
+                                                start_col = start_col,
+                                                end_row = end_row,
+                                                end_col = end_col,
+                                            })
+                                        end
+                                        
+                                        table.sort(captures, function(a, b)
+                                            if a.start_row ~= b.start_row then return a.start_row < b.start_row end
+                                            if a.start_col ~= b.start_col then return a.start_col < b.start_col end
+                                            local a_size = (a.end_row - a.start_row) * 1000 + (a.end_col - a.start_col)
+                                            local b_size = (b.end_row - b.start_row) * 1000 + (b.end_col - b.start_col)
+                                            return a_size < b_size
+                                        end)
+                                        
+                                        for _, capture in ipairs(captures) do
+                                            local capture_name = capture.name
+                                            local start_row = capture.start_row
+                                            local start_col = capture.start_col
+                                            local end_row = capture.end_row
+                                            local end_col = capture.end_col
                                             
                                             if start_row == end_row then
                                                 local actual_line_num = saved_code_block_start + 1 + start_row
                                                 if actual_line_num < saved_line_num then
                                                     local hl_group = '@' .. capture_name .. '.' .. saved_code_lang
                                                     
-                                                    local ok_hl = pcall(vim.api.nvim_buf_add_highlight,
+                                                    pcall(vim.api.nvim_buf_add_highlight,
                                                         buf,
                                                         ui_ns_id,
                                                         hl_group,
@@ -196,9 +219,6 @@ function M.show_issue_in_buffer(issue, options)
                                                         saved_indent_len + start_col,
                                                         saved_indent_len + end_col
                                                     )
-                                                    if ok_hl then
-                                                        highlight_count = highlight_count + 1
-                                                    end
                                                 end
                                             else
                                                 for row = start_row, end_row do
@@ -208,7 +228,7 @@ function M.show_issue_in_buffer(issue, options)
                                                         local row_start_col = row == start_row and (saved_indent_len + start_col) or saved_indent_len
                                                         local row_end_col = row == end_row and (saved_indent_len + end_col) or -1
                                                         
-                                                        local ok_hl = pcall(vim.api.nvim_buf_add_highlight,
+                                                        pcall(vim.api.nvim_buf_add_highlight,
                                                             buf,
                                                             ui_ns_id,
                                                             hl_group,
@@ -216,9 +236,6 @@ function M.show_issue_in_buffer(issue, options)
                                                             row_start_col,
                                                             row_end_col
                                                         )
-                                                        if ok_hl then
-                                                            highlight_count = highlight_count + 1
-                                                        end
                                                     end
                                                 end
                                             end
