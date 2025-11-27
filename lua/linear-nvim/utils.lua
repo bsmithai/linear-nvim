@@ -253,12 +253,10 @@ Opens a url in your default browser, bypassing gh.
 ]]
 --- @param url string the url to open.
 function M.open_in_browser_raw(url)
-    -- Detect OS using vim.fn.has for type safety
-
     if vim.fn.has("macunix") == 1 then
-        os.execute("open " .. url)
+        os.execute("open '" .. url .. "' &")
     elseif vim.fn.has("unix") == 1 then
-        os.execute("xdg-open " .. url)
+        os.execute("xdg-open '" .. url .. "' &")
     elseif vim.fn.has("win32") == 1 or vim.fn.has("win64") == 1 then
         os.execute("start " .. url)
     end
