@@ -131,11 +131,23 @@ function M.show_issue_in_buffer(issue, options)
     end
     
     if desc_start_line then
+        vim.schedule(function()
+            if not vim.api.nvim_buf_is_valid(buf) then return end
+            
+            local ok, ts_highlighter = pcall(require, "vim.treesitter.highlighter")
+            if ok and ts_highlighter then
+                vim.api.nvim_buf_call(buf, function()
+                    vim.treesitter.start(buf, 'markdown')
+                end)
+            end
+        end)
+        
         local ui_ns_id = vim.api.nvim_create_namespace('linear_markdown_ui')
         local lines_content = vim.api.nvim_buf_get_lines(buf, desc_start_line, -1, false)
         
         local in_code_block = false
         local code_lang = nil
+        local code_start_line = nil
         
         for i, line in ipairs(lines_content) do
             local line_num = desc_start_line + i - 1
@@ -143,23 +155,58 @@ function M.show_issue_in_buffer(issue, options)
             local indent_len = #line - #actual_line
             
             if actual_line:match("^```") then
-                in_code_block = not in_code_block
-                if in_code_block then
+                if not in_code_block then
+                    in_code_block = true
+                    code_start_line = line_num
                     code_lang = actual_line:match("^```(%w+)")
                     vim.api.nvim_buf_set_extmark(buf, ui_ns_id, line_num, indent_len, {
                         end_col = #line,
                         conceal = "",
                     })
                 else
-                    code_lang = nil
+                    in_code_block = false
                     vim.api.nvim_buf_set_extmark(buf, ui_ns_id, line_num, indent_len, {
                         end_col = #line,
                         conceal = "",
                     })
+                    
+                    if code_lang and code_start_line then
+                        vim.schedule(function()
+                            if not vim.api.nvim_buf_is_valid(buf) then return end
+                            local ok_ts = pcall(function()
+                                local parser = vim.treesitter.get_string_parser(
+                                    table.concat(vim.api.nvim_buf_get_lines(buf, code_start_line + 1, line_num, false), "\n"),
+                                    code_lang
+                                )
+                                if parser then
+                                    parser:parse()
+                                    local tree = parser:trees()[1]
+                                    if tree then
+                                        local highlighter_query = vim.treesitter.query.get(code_lang, 'highlights')
+                                        if highlighter_query then
+                                            for id, node in highlighter_query:iter_captures(tree:root(), 0) do
+                                                local name = highlighter_query.captures[id]
+                                                local start_row, start_col, end_row, end_col = node:range()
+                                                vim.api.nvim_buf_add_highlight(
+                                                    buf,
+                                                    ui_ns_id,
+                                                    '@' .. name .. '.' .. code_lang,
+                                                    code_start_line + 1 + start_row,
+                                                    indent_len + start_col,
+                                                    indent_len + end_col
+                                                )
+                                            end
+                                        end
+                                    end
+                                end
+                            end)
+                        end)
+                    end
+                    
+                    code_lang = nil
+                    code_start_line = nil
                 end
-            elseif in_code_block then
-                vim.api.nvim_buf_add_highlight(buf, ui_ns_id, "String", line_num, indent_len, #line)
-            else
+            elseif not in_code_block then
                 local unchecked = actual_line:find("%- %[ %]")
                 if unchecked then
                     vim.api.nvim_buf_set_extmark(buf, ui_ns_id, line_num, indent_len + unchecked - 1, {
