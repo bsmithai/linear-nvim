@@ -3,16 +3,13 @@ local M = {}
 --- @param issue table
 --- @param options table
 function M.show_issue_in_buffer(issue, options)
-    -- Create a new buffer
     local buf = vim.api.nvim_create_buf(false, true)
     
-    -- Set buffer options
     vim.api.nvim_buf_set_option(buf, 'buftype', 'nofile')
     vim.api.nvim_buf_set_option(buf, 'swapfile', false)
     vim.api.nvim_buf_set_option(buf, 'filetype', 'linear-issue')
     vim.api.nvim_buf_set_option(buf, 'bufhidden', 'wipe')
     
-    -- Build the content
     local lines = {}
     local highlights = {}
     
@@ -157,7 +154,6 @@ function M.show_issue_in_buffer(issue, options)
                 end
             end
             
-            -- Highlight bold (**text**) - remove the ** and highlight the text
             local bold_start = rendered_line:find("%*%*")
             while bold_start do
                 local bold_end = rendered_line:find("%*%*", bold_start + 2)
@@ -167,11 +163,9 @@ function M.show_issue_in_buffer(issue, options)
                     local after = rendered_line:sub(bold_end + 2)
                     rendered_line = before .. bold_text .. after
                     
-                    -- Update the line in the buffer
                     lines[#lines] = "    " .. rendered_line
                     indented_line = lines[#lines]
                     
-                    -- Add highlight for the bold text
                     table.insert(highlights, {line = line_start, col_start = 4 + #before, col_end = 4 + #before + #bold_text, hl_group = "Bold"})
                     
                     bold_start = rendered_line:find("%*%*")
@@ -180,7 +174,6 @@ function M.show_issue_in_buffer(issue, options)
                 end
             end
             
-            -- Highlight code blocks (`code`)
             for code_text in rendered_line:gmatch("`([^`]+)`") do
                 local start_pos = rendered_line:find("`" .. code_text:gsub("[%^%$%(%)%%%.%[%]%*%+%-%?]", "%%%1") .. "`")
                 if start_pos then
@@ -192,7 +185,6 @@ function M.show_issue_in_buffer(issue, options)
         table.insert(lines, "")
     end
     
-    -- URL
     if issue.url then
         table.insert(lines, "  ───────────────────────────────────────────────────────────────────")
         table.insert(lines, "")
@@ -206,10 +198,8 @@ function M.show_issue_in_buffer(issue, options)
     table.insert(lines, "  Press 'q' to close | 'o' to open in browser | 'e' to edit description")
     table.insert(highlights, {line = #lines - 1, col_start = 2, col_end = #lines[#lines], hl_group = "Comment"})
     
-    -- Set buffer content
     vim.api.nvim_buf_set_lines(buf, 0, -1, false, lines)
     
-    -- Apply highlights
     local ns_id = vim.api.nvim_create_namespace('linear_issue_view')
     for _, hl in ipairs(highlights) do
         vim.api.nvim_buf_add_highlight(buf, ns_id, hl.hl_group, hl.line, hl.col_start, hl.col_end)
@@ -236,13 +226,11 @@ function M.show_issue_in_buffer(issue, options)
         
         local width = math.min(100, math.floor(win_width * 0.8))
         
-        -- Update separators for current width
         update_separators(win_width)
         
-        -- Calculate height based on content, with max limits
         local content_height = #lines
         local max_height = math.floor(win_height * 0.8)
-        local height = math.min(content_height + 2, max_height) -- +2 for border
+        local height = math.min(content_height + 2, max_height)
         
         local row = math.floor((win_height - height) / 2)
         local col = math.floor((win_width - width) / 2)
@@ -286,14 +274,12 @@ function M.show_issue_in_buffer(issue, options)
         end,
     })
     
-    -- Set window options
     vim.api.nvim_win_set_option(win, 'cursorline', true)
     vim.api.nvim_win_set_option(win, 'wrap', true)
     vim.api.nvim_win_set_option(win, 'breakindent', true)
     vim.api.nvim_win_set_option(win, 'breakindentopt', 'shift:0')
     vim.api.nvim_win_set_option(win, 'linebreak', true)
     
-    -- Set up keymaps
     local function close_window()
         if vim.api.nvim_win_is_valid(win) then
             vim.api.nvim_win_close(win, true)
@@ -309,7 +295,6 @@ function M.show_issue_in_buffer(issue, options)
     end
     
     local function edit_description()
-        -- Capture the issue ID BEFORE closing
         local log = require("plenary.log")
         log.debug("Issue object: " .. vim.inspect(issue))
         
@@ -323,10 +308,8 @@ function M.show_issue_in_buffer(issue, options)
         
         close_window()
         
-        -- Create a temporary markdown file
         local tmp_file = vim.fn.tempname() .. '.md'
         
-        -- Write current description to temp file
         local current_desc = issue.description or ""
         if current_desc == vim.NIL then
             current_desc = ""
@@ -335,7 +318,6 @@ function M.show_issue_in_buffer(issue, options)
         local lines_to_write = vim.split(current_desc, '\n', { plain = true })
         vim.fn.writefile(lines_to_write, tmp_file)
         
-        -- Check if there's already a buffer for this temp file and delete it
         for _, buf in ipairs(vim.api.nvim_list_bufs()) do
             if vim.api.nvim_buf_is_valid(buf) then
                 local buf_name = vim.api.nvim_buf_get_name(buf)
@@ -345,18 +327,15 @@ function M.show_issue_in_buffer(issue, options)
             end
         end
         
-        -- Create a buffer for editing - use normal buffer type for full vim features
         local edit_buf = vim.api.nvim_create_buf(false, false)
         vim.api.nvim_buf_set_option(edit_buf, 'buftype', '')
         vim.api.nvim_buf_set_option(edit_buf, 'filetype', 'markdown')
         vim.api.nvim_buf_set_option(edit_buf, 'bufhidden', 'wipe')
         vim.api.nvim_buf_set_name(edit_buf, tmp_file)
         
-        -- Set the buffer content
         vim.api.nvim_buf_set_lines(edit_buf, 0, -1, false, lines_to_write)
         vim.api.nvim_buf_set_option(edit_buf, 'modified', false)
         
-        -- Calculate floating window size
         local win_width = vim.api.nvim_get_option("columns")
         local win_height = vim.api.nvim_get_option("lines")
         local width = math.min(100, math.floor(win_width * 0.8))
@@ -364,7 +343,6 @@ function M.show_issue_in_buffer(issue, options)
         local row = math.floor((win_height - height) / 2)
         local col = math.floor((win_width - width) / 2)
         
-        -- Open in a floating window
         local float_win = vim.api.nvim_open_win(edit_buf, true, {
             relative = 'editor',
             width = width,
@@ -380,17 +358,14 @@ function M.show_issue_in_buffer(issue, options)
         vim.api.nvim_win_set_option(float_win, 'wrap', true)
         vim.api.nvim_win_set_option(float_win, 'linebreak', true)
         
-        -- Set up autocmd to sync to Linear after writing to file
         local edit_group = vim.api.nvim_create_augroup('LinearIssueDescEdit', { clear = true })
         vim.api.nvim_create_autocmd('BufWritePost', {
             group = edit_group,
             buffer = edit_buf,
             callback = function()
-                -- Read the updated description
                 local updated_lines = vim.api.nvim_buf_get_lines(edit_buf, 0, -1, false)
                 local updated_desc = table.concat(updated_lines, '\n')
                 
-                -- Update the issue on Linear
                 local linear_nvim = require("linear-nvim")
                 local client = linear_nvim.client
                 
@@ -406,34 +381,27 @@ function M.show_issue_in_buffer(issue, options)
         
         -- Set up a custom quit command that saves, closes, and reopens issue view
         local function safe_quit()
-            -- Save first
             local updated_lines = vim.api.nvim_buf_get_lines(edit_buf, 0, -1, false)
             local updated_desc = table.concat(updated_lines, '\n')
             
-            -- Write to temp file
             vim.fn.writefile(updated_lines, tmp_file)
             
-            -- Close the floating window
             if vim.api.nvim_win_is_valid(float_win) then
                 vim.api.nvim_win_close(float_win, true)
             end
             
-            -- Delete the buffer
             if vim.api.nvim_buf_is_valid(edit_buf) then
                 vim.api.nvim_buf_delete(edit_buf, { force = true })
             end
             
-            -- Clean up temp file
             vim.fn.delete(tmp_file)
             
-            -- Update the issue on Linear
             local linear_nvim = require("linear-nvim")
             local client = linear_nvim.client
             
             client:update_issue(issue_id, { description = updated_desc }, function(updated_issue)
                 if updated_issue then
                     vim.notify("Issue description saved", vim.log.levels.INFO)
-                    -- Reopen the issue view with updated data
                     vim.schedule(function()
                         M.show_issue_in_buffer(updated_issue, options)
                     end)
@@ -443,10 +411,8 @@ function M.show_issue_in_buffer(issue, options)
             end)
         end
         
-        -- Map q to save and close (only in normal mode)
         vim.keymap.set('n', 'q', safe_quit, { buffer = edit_buf, silent = true })
         
-        -- Also clean up on window close
         vim.api.nvim_create_autocmd('WinClosed', {
             group = edit_group,
             pattern = tostring(float_win),
@@ -458,13 +424,11 @@ function M.show_issue_in_buffer(issue, options)
             end,
         })
         
-        -- Add instruction at the bottom
         vim.notify("Editing description - :w to save, 'q' to close", vim.log.levels.INFO)
     end
     
     local function edit_labels()
         close_window()
-        -- Call the update labels function
         local linear_nvim = require("linear-nvim")
         local client = linear_nvim.client
         
@@ -506,7 +470,6 @@ function M.show_issue_in_buffer(issue, options)
                 client:update_issue(issue.id, { labelIds = label_ids }, function(updated_issue)
                     if updated_issue then
                         vim.notify("Issue labels updated successfully", vim.log.levels.INFO)
-                        -- Refresh the view
                         M.show_issue_in_buffer(updated_issue, options)
                     else
                         vim.notify("Failed to update issue labels", vim.log.levels.ERROR)

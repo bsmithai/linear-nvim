@@ -219,12 +219,10 @@ function M.create_issue_with_labels()
         end
         
         show_label_picker(team_id, function(label_ids)
-            -- Temporarily override default labels with selected ones
             local original_labels = M.client._default_labels
             M.client._default_labels = label_ids
             
             M.client:create_issue(title, description, function(issue)
-                -- Restore original labels
                 M.client._default_labels = original_labels
                 
                 if issue ~= nil then

@@ -399,7 +399,6 @@ function LinearClient:update_issue(issue_id, updates, callback)
     end
     
     if updates.description then
-        -- Double escape for GraphQL in JSON
         local parsed_desc = updates.description
         parsed_desc = parsed_desc:gsub("\\", "\\\\\\\\") -- Escape backslashes (needs 4 for JSON in GraphQL)
         parsed_desc = parsed_desc:gsub('"', '\\\\\\"') -- Escape quotes
@@ -429,9 +428,6 @@ function LinearClient:update_issue(issue_id, updates, callback)
         updates_string,
         issue_fields_query
     )
-    
-    -- Debug: log the query
-    log.debug(string.format("Update query: %s", query:sub(1, 500)))
     
     local data = self._make_query(self:fetch_api_key(), query)
     
