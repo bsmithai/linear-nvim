@@ -183,35 +183,48 @@ function M.show_issue_in_buffer(issue, options)
                                             local capture_name = query.captures[id]
                                             local start_row, start_col, end_row, end_col = node:range()
                                             
-                                            local actual_line_num = saved_code_block_start + 1 + start_row
-                                            if actual_line_num < saved_line_num then
-                                                local hl_group = '@' .. capture_name .. '.' .. saved_code_lang
-                                                local end_col_adjusted = start_row == end_row and (saved_indent_len + end_col) or -1
-                                                
-                                                local ok_hl = pcall(vim.api.nvim_buf_add_highlight,
-                                                    buf,
-                                                    ui_ns_id,
-                                                    hl_group,
-                                                    actual_line_num,
-                                                    saved_indent_len + start_col,
-                                                    end_col_adjusted
-                                                )
-                                                if ok_hl then
-                                                    highlight_count = highlight_count + 1
+                                            if start_row == end_row then
+                                                local actual_line_num = saved_code_block_start + 1 + start_row
+                                                if actual_line_num < saved_line_num then
+                                                    local hl_group = '@' .. capture_name .. '.' .. saved_code_lang
+                                                    
+                                                    local ok_hl = pcall(vim.api.nvim_buf_add_highlight,
+                                                        buf,
+                                                        ui_ns_id,
+                                                        hl_group,
+                                                        actual_line_num,
+                                                        saved_indent_len + start_col,
+                                                        saved_indent_len + end_col
+                                                    )
+                                                    if ok_hl then
+                                                        highlight_count = highlight_count + 1
+                                                    end
+                                                end
+                                            else
+                                                for row = start_row, end_row do
+                                                    local actual_line_num = saved_code_block_start + 1 + row
+                                                    if actual_line_num < saved_line_num then
+                                                        local hl_group = '@' .. capture_name .. '.' .. saved_code_lang
+                                                        local row_start_col = row == start_row and (saved_indent_len + start_col) or saved_indent_len
+                                                        local row_end_col = row == end_row and (saved_indent_len + end_col) or -1
+                                                        
+                                                        local ok_hl = pcall(vim.api.nvim_buf_add_highlight,
+                                                            buf,
+                                                            ui_ns_id,
+                                                            hl_group,
+                                                            actual_line_num,
+                                                            row_start_col,
+                                                            row_end_col
+                                                        )
+                                                        if ok_hl then
+                                                            highlight_count = highlight_count + 1
+                                                        end
+                                                    end
                                                 end
                                             end
                                         end
-                                        if highlight_count == 0 then
-                                            vim.notify("No highlights applied for " .. saved_code_lang .. " block", vim.log.levels.WARN)
-                                        end
-                                    else
-                                        vim.notify("No highlight query for " .. saved_code_lang, vim.log.levels.WARN)
                                     end
-                                else
-                                    vim.notify("Failed to parse " .. saved_code_lang .. " code", vim.log.levels.WARN)
                                 end
-                            else
-                                vim.notify("Failed to create parser for " .. saved_code_lang, vim.log.levels.WARN)
                             end
                         end)
                     end
