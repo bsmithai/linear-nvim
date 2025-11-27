@@ -24,6 +24,7 @@ LinearClient._make_query = function(api_key, query)
     local resp = curl.post(API_URL, {
         body = query,
         headers = headers,
+        decoded = true,
     })
 
     if resp.status ~= 200 then
@@ -37,7 +38,30 @@ LinearClient._make_query = function(api_key, query)
         return nil
     end
 
-    local data = vim.json.decode(resp.body)
+    local body_type = type(resp.body)
+    if body_type ~= "string" then
+        log.error(string.format("Response body is %s, not string. Body: %s", body_type, vim.inspect(resp.body)))
+        return nil
+    end
+
+    local ok, data = pcall(vim.json.decode, resp.body)
+    if not ok then
+        log.error(string.format("Failed to decode JSON: %s. Body: %s", data, resp.body))
+        return nil
+    end
+    
+    local data_type = type(data)
+    if data_type ~= "table" then
+        log.error(string.format("Decoded data is %s, not table. Data: %s", data_type, vim.inspect(data)))
+        return nil
+    end
+    
+    if data.errors then
+        log.error(string.format("GraphQL errors: %s", vim.inspect(data.errors)))
+        vim.notify("Linear API error: " .. (data.errors[1].message or "Unknown error"), vim.log.levels.ERROR)
+        return nil
+    end
+    
     return data
 end
 
@@ -223,6 +247,60 @@ function LinearClient:get_teams()
     return teams
 end
 
+--- @param team_id string?
+--- @return table?
+function LinearClient:get_labels(team_id)
+    local query
+    if team_id then
+        query = string.format(
+            '{"query":"query { issueLabels(filter: { team: { id: { eq: \\"%s\\" }}}) { nodes { id name color }}}"}',
+            team_id
+        )
+    else
+        -- Fetch all labels across all teams
+        query = '{"query":"query { issueLabels { nodes { id name color }}}"}'
+    end
+    
+    local data = self._make_query(self:fetch_api_key(), query)
+    
+    if not data or not data.data or not data.data.issueLabels or not data.data.issueLabels.nodes then
+        log.error("Failed to fetch labels")
+        return nil
+    end
+    
+    return data.data.issueLabels.nodes
+end
+
+--- @param team_id string
+--- @param label_names string[]
+--- @return string[]
+function LinearClient:get_label_ids_by_names(team_id, label_names)
+    if #label_names == 0 then
+        return {}
+    end
+    
+    local labels = self:get_labels(team_id)
+    if not labels then
+        return {}
+    end
+    
+    local label_map = {}
+    for _, label in ipairs(labels) do
+        label_map[label.name] = label.id
+    end
+    
+    local label_ids = {}
+    for _, name in ipairs(label_names) do
+        if label_map[name] then
+            table.insert(label_ids, label_map[name])
+        else
+            log.warn(string.format("Label '%s' not found in team", name))
+        end
+    end
+    
+    return label_ids
+end
+
 --- @param labels string[]
 --- @return string
 local function convertDefaultLabelsToGQLArray(labels)
@@ -239,8 +317,6 @@ end
 function LinearClient:create_issue(title, description, callback)
     local parsed_title = utils.escape_json_string(title)
     local issue_fields_query = table.concat(self._issue_fields, " ")
-    local labels_to_attach =
-        convertDefaultLabelsToGQLArray(self._default_labels)
     local user_id = self:get_user_id()
 
     if not user_id then
@@ -256,6 +332,9 @@ function LinearClient:create_issue(title, description, callback)
             return
         end
 
+        local label_ids = self:get_label_ids_by_names(team_id, self._default_labels)
+        local labels_to_attach = convertDefaultLabelsToGQLArray(label_ids)
+
         local query = string.format(
             '{"query": "mutation IssueCreate { issueCreate(input: {title: \\"%s\\" teamId: \\"%s\\" assigneeId: \\"%s\\" labelIds: %s}) { success issue { %s } } }"}',
             parsed_title,
@@ -266,6 +345,11 @@ function LinearClient:create_issue(title, description, callback)
         )
 
         local data = self._make_query(self:fetch_api_key(), query)
+        
+        print(string.format("[DEBUG] create_issue received data of type: %s", type(data)))
+        if data then
+            print(string.format("[DEBUG] data.data is of type: %s", type(data.data)))
+        end
 
         if
             data
@@ -288,7 +372,7 @@ end
 function LinearClient:get_issue_details(issue_id)
     local issue_fields_query = table.concat(self._issue_fields, " ")
     local query = string.format(
-        '{"query":"query { issue(id: \\"%s\\") { %s }}"}',
+        '{"query":"query { issue(id: \\"%s\\") { id %s state { id name } assignee { id name } labels { nodes { id name color }} project { id name } }}"}',
         issue_id,
         issue_fields_query
     )
@@ -300,6 +384,83 @@ function LinearClient:get_issue_details(issue_id)
     else
         vim.notify("Issue not found in response", vim.log.levels.ERROR)
         return nil
+    end
+end
+
+--- @param issue_id string
+--- @param updates table
+--- @param callback function(issue: table?)
+function LinearClient:update_issue(issue_id, updates, callback)
+    local update_fields = {}
+    
+    if updates.title then
+        local parsed_title = utils.escape_json_string(updates.title)
+        table.insert(update_fields, string.format('title: \\"%s\\"', parsed_title))
+    end
+    
+    if updates.description then
+        local parsed_desc = updates.description
+        parsed_desc = parsed_desc:gsub("\\", "\\\\\\\\") -- Escape backslashes (needs 4 for JSON in GraphQL)
+        parsed_desc = parsed_desc:gsub('"', '\\\\\\"') -- Escape quotes
+        parsed_desc = parsed_desc:gsub("\n", "\\\\n") -- Escape newlines
+        parsed_desc = parsed_desc:gsub("\r", "\\\\r") -- Escape carriage returns
+        parsed_desc = parsed_desc:gsub("\t", "\\\\t") -- Escape tabs
+        table.insert(update_fields, string.format('description: \\"%s\\"', parsed_desc))
+    end
+    
+    if updates.labelIds then
+        local labels_array = convertDefaultLabelsToGQLArray(updates.labelIds)
+        table.insert(update_fields, string.format('labelIds: %s', labels_array))
+    end
+    
+    if #update_fields == 0 then
+        vim.notify("No updates provided", vim.log.levels.WARN)
+        callback(nil)
+        return
+    end
+    
+    local issue_fields_query = table.concat(self._issue_fields, " ")
+    local updates_string = table.concat(update_fields, " ")
+    
+    local query = string.format(
+        '{"query": "mutation IssueUpdate { issueUpdate(id: \\"%s\\" input: {%s}) { success issue { id %s state { id name } assignee { id name } labels { nodes { id name color }} project { id name } } } }"}',
+        issue_id,
+        updates_string,
+        issue_fields_query
+    )
+    
+    local data = self._make_query(self:fetch_api_key(), query)
+    
+    if not data then
+        vim.notify("Failed to update issue - no response", vim.log.levels.ERROR)
+        callback(nil)
+        return
+    end
+    
+    if data.errors then
+        local error_msg = data.errors[1] and data.errors[1].message or "Unknown error"
+        local error_details = ""
+        if data.errors[1] and data.errors[1].extensions then
+            error_details = vim.inspect(data.errors[1].extensions)
+        end
+        vim.notify("Failed to update issue: " .. error_msg, vim.log.levels.ERROR)
+        log.error(string.format("GraphQL errors: %s", vim.inspect(data.errors)))
+        log.error(string.format("Query was: %s", query:sub(1, 1000)))
+        callback(nil)
+        return
+    end
+    
+    if
+        data.data
+        and data.data.issueUpdate
+        and data.data.issueUpdate.success
+        and data.data.issueUpdate.issue
+    then
+        callback(data.data.issueUpdate.issue)
+    else
+        vim.notify("Failed to update issue - unexpected response", vim.log.levels.ERROR)
+        log.error(string.format("Unexpected response: %s", vim.inspect(data)))
+        callback(nil)
     end
 end
 

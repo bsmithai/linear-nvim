@@ -154,6 +154,96 @@ function M.show_telescope_picker(entries, prompt_title)
         :find()
 end
 
+--- @param entries Entry[]
+--- @param prompt_title string
+--- @param callback function(selected: Entry[])
+function M.show_telescope_picker_multiselect(entries, prompt_title, callback)
+    local action_set = require('telescope.actions.set')
+    
+    pickers
+        .new({}, {
+            prompt_title = prompt_title .. " (Tab to toggle, Enter to confirm)",
+            finder = finders.new_table({
+                results = entries,
+                entry_maker = function(entry)
+                    return {
+                        value = entry.value,
+                        display = entry.display,
+                        ordinal = entry.ordinal,
+                        description = entry.description,
+                        label = entry.label,
+                    }
+                end,
+            }),
+            sorter = conf.generic_sorter({}),
+            attach_mappings = function(prompt_bufnr, map)
+                actions.select_default:replace(function()
+                    local picker = action_state.get_current_picker(prompt_bufnr)
+                    local selections = picker:get_multi_selection()
+                    actions.close(prompt_bufnr)
+                    
+                    if #selections == 0 then
+                        local selection = action_state.get_selected_entry()
+                        if selection then
+                            selections = { selection }
+                        end
+                    end
+                    
+                    callback(selections)
+                end)
+                
+                return true
+            end,
+        })
+        :find()
+end
+
+--- @param entries Entry[]
+--- @param prompt_title string
+--- @param callback function(selected: Entry)
+function M.show_telescope_picker_with_action(entries, prompt_title, callback)
+    pickers
+        .new({}, {
+            prompt_title = prompt_title,
+            finder = finders.new_table({
+                results = entries,
+                entry_maker = function(entry)
+                    return {
+                        value = entry.value,
+                        display = entry.display,
+                        ordinal = entry.ordinal,
+                        description = entry.description,
+                        issue = entry.issue,
+                    }
+                end,
+            }),
+            sorter = conf.generic_sorter({}),
+            previewer = previewers.new_buffer_previewer({
+                define_preview = function(self, entry, _)
+                    local lines =
+                        vim.split(entry.description, "\n", { plain = true })
+                    vim.api.nvim_buf_set_lines(
+                        self.state.bufnr,
+                        0,
+                        -1,
+                        false,
+                        lines
+                    )
+                end,
+            }),
+            attach_mappings = function(prompt_bufnr, map)
+                actions.select_default:replace(function()
+                    actions.close(prompt_bufnr)
+                    local selection = action_state.get_selected_entry()
+                    callback(selection)
+                end)
+                
+                return true
+            end,
+        })
+        :find()
+end
+
 function M.get_current_word()
     return vim.fn.expand("<cWORD>")
 end
@@ -163,12 +253,10 @@ Opens a url in your default browser, bypassing gh.
 ]]
 --- @param url string the url to open.
 function M.open_in_browser_raw(url)
-    -- Detect OS using vim.fn.has for type safety
-
     if vim.fn.has("macunix") == 1 then
-        os.execute("open " .. url)
+        os.execute("open '" .. url .. "' &")
     elseif vim.fn.has("unix") == 1 then
-        os.execute("xdg-open " .. url)
+        os.execute("xdg-open '" .. url .. "' &")
     elseif vim.fn.has("win32") == 1 or vim.fn.has("win64") == 1 then
         os.execute("start " .. url)
     end
