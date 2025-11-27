@@ -256,8 +256,8 @@ function M.show_issue_in_buffer(issue, options)
                 local unchecked = actual_line:find("%- %[ %]")
                 if unchecked then
                     vim.api.nvim_buf_set_extmark(buf, ui_ns_id, line_num, indent_len + unchecked - 1, {
-                        end_col = indent_len + unchecked + 4,
-                        virt_text = {{"□ ", "LinearMdTodo"}},
+                        end_col = indent_len + unchecked + 5,
+                        virt_text = {{"□", "LinearMdTodo"}},
                         virt_text_pos = "overlay",
                         hl_mode = "combine",
                     })
@@ -268,8 +268,8 @@ function M.show_issue_in_buffer(issue, options)
                 local checked = checked_lower or checked_upper
                 if checked then
                     vim.api.nvim_buf_set_extmark(buf, ui_ns_id, line_num, indent_len + checked - 1, {
-                        end_col = indent_len + checked + 4,
-                        virt_text = {{"✔ ", "LinearMdDone"}},
+                        end_col = indent_len + checked + 5,
+                        virt_text = {{"✔", "LinearMdDone"}},
                         virt_text_pos = "overlay",
                         hl_mode = "combine",
                     })
