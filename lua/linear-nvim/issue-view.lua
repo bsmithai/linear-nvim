@@ -7,7 +7,7 @@ function M.show_issue_in_buffer(issue, options)
     
     vim.api.nvim_buf_set_option(buf, 'buftype', 'nofile')
     vim.api.nvim_buf_set_option(buf, 'swapfile', false)
-    vim.api.nvim_buf_set_option(buf, 'filetype', 'linear-issue')
+    vim.api.nvim_buf_set_option(buf, 'filetype', 'markdown')
     vim.api.nvim_buf_set_option(buf, 'bufhidden', 'wipe')
     
     local lines = {}
@@ -379,6 +379,8 @@ function M.show_issue_in_buffer(issue, options)
     vim.api.nvim_win_set_option(win, 'breakindent', true)
     vim.api.nvim_win_set_option(win, 'breakindentopt', 'shift:0')
     vim.api.nvim_win_set_option(win, 'linebreak', true)
+    vim.api.nvim_win_set_option(win, 'conceallevel', 2)
+    vim.api.nvim_win_set_option(win, 'concealcursor', 'nc')
     
     local function close_window()
         if vim.api.nvim_win_is_valid(win) then
