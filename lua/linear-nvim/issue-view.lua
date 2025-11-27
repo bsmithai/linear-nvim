@@ -321,28 +321,48 @@ function M.show_issue_in_buffer(issue, options)
             end,
         })
         
-        -- Clean up temp file on buffer close and return to previous buffer
-        vim.api.nvim_create_autocmd('BufDelete', {
+        -- Set up a custom quit command that returns to previous buffer
+        local function safe_quit()
+            -- Delete the temp file
+            vim.fn.delete(tmp_file)
+            
+            -- Try to switch to a valid buffer from before
+            if #bufs > 0 then
+                for _, b in ipairs(bufs) do
+                    if vim.api.nvim_buf_is_valid(b) and vim.bo[b].buflisted then
+                        vim.cmd('buffer ' .. b)
+                        vim.cmd('bdelete ' .. edit_buf)
+                        return
+                    end
+                end
+            end
+            -- If no valid buffer, open an empty one before deleting this buffer
+            vim.cmd('enew')
+            vim.cmd('bdelete ' .. edit_buf)
+        end
+        
+        -- Map :q and :wq to safe quit
+        vim.keymap.set('n', 'q', safe_quit, { buffer = edit_buf, silent = true })
+        vim.api.nvim_buf_set_keymap(edit_buf, 'n', 'ZZ', '', {
+            callback = function()
+                vim.cmd('write')
+                safe_quit()
+            end,
+            noremap = true,
+            silent = true,
+        })
+        
+        -- Also clean up on BufUnload just in case
+        vim.api.nvim_create_autocmd('BufUnload', {
             group = edit_group,
             buffer = edit_buf,
             callback = function()
                 vim.fn.delete(tmp_file)
-                -- Try to switch to a valid buffer from before
-                if #bufs > 0 then
-                    for _, b in ipairs(bufs) do
-                        if vim.api.nvim_buf_is_valid(b) and vim.bo[b].buflisted then
-                            vim.cmd('buffer ' .. b)
-                            return
-                        end
-                    end
-                end
-                -- If no valid buffer, open an empty one
-                vim.cmd('enew')
             end,
         })
         
         -- Add instruction at the bottom
-        vim.notify("Editing description - :w to save, :q to close", vim.log.levels.INFO)
+        vim.notify("Editing description - :w to save, 'q' to close", vim.log.levels.INFO)
     end
     
     local function edit_labels()
