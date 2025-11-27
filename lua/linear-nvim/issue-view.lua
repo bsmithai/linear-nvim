@@ -298,12 +298,12 @@ function M.show_issue_in_buffer(issue, options)
             end
         end
         
-        -- Create a buffer for editing
-        local edit_buf = vim.api.nvim_create_buf(false, true)
-        vim.api.nvim_buf_set_option(edit_buf, 'buftype', 'acwrite')
+        -- Create a buffer for editing - use normal buffer type for full vim features
+        local edit_buf = vim.api.nvim_create_buf(false, false)
+        vim.api.nvim_buf_set_option(edit_buf, 'buftype', '')
         vim.api.nvim_buf_set_option(edit_buf, 'filetype', 'markdown')
         vim.api.nvim_buf_set_option(edit_buf, 'bufhidden', 'wipe')
-        vim.api.nvim_buf_set_name(edit_buf, 'Linear: Edit Description')
+        vim.api.nvim_buf_set_name(edit_buf, tmp_file)
         
         -- Set the buffer content
         vim.api.nvim_buf_set_lines(edit_buf, 0, -1, false, lines_to_write)
@@ -333,9 +333,9 @@ function M.show_issue_in_buffer(issue, options)
         vim.api.nvim_win_set_option(float_win, 'wrap', true)
         vim.api.nvim_win_set_option(float_win, 'linebreak', true)
         
-        -- Set up autocmd to save on buffer write and update issue
+        -- Set up autocmd to sync to Linear after writing to file
         local edit_group = vim.api.nvim_create_augroup('LinearIssueDescEdit', { clear = true })
-        vim.api.nvim_create_autocmd('BufWriteCmd', {
+        vim.api.nvim_create_autocmd('BufWritePost', {
             group = edit_group,
             buffer = edit_buf,
             callback = function()
@@ -343,20 +343,15 @@ function M.show_issue_in_buffer(issue, options)
                 local updated_lines = vim.api.nvim_buf_get_lines(edit_buf, 0, -1, false)
                 local updated_desc = table.concat(updated_lines, '\n')
                 
-                -- Write to temp file
-                vim.fn.writefile(updated_lines, tmp_file)
-                
-                -- Update the issue
+                -- Update the issue on Linear
                 local linear_nvim = require("linear-nvim")
                 local client = linear_nvim.client
                 
                 client:update_issue(issue_id, { description = updated_desc }, function(updated_issue)
                     if updated_issue then
-                        vim.notify("Issue description updated successfully", vim.log.levels.INFO)
-                        -- Mark buffer as saved
-                        vim.api.nvim_buf_set_option(edit_buf, 'modified', false)
+                        vim.notify("Issue synced to Linear", vim.log.levels.INFO)
                     else
-                        vim.notify("Failed to update issue description", vim.log.levels.ERROR)
+                        vim.notify("Failed to sync to Linear", vim.log.levels.ERROR)
                     end
                 end)
             end,
