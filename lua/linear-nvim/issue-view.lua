@@ -7,7 +7,7 @@ function M.show_issue_in_buffer(issue, options)
     
     vim.api.nvim_buf_set_option(buf, 'buftype', 'nofile')
     vim.api.nvim_buf_set_option(buf, 'swapfile', false)
-    vim.api.nvim_buf_set_option(buf, 'filetype', 'linear-issue')
+    vim.api.nvim_buf_set_option(buf, 'filetype', 'markdown-inline')
     vim.api.nvim_buf_set_option(buf, 'bufhidden', 'wipe')
     
     local lines = {}
