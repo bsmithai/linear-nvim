@@ -419,24 +419,30 @@ function M.show_issue_in_buffer(issue, options)
     end
     
     local function copy_link()
-        if issue.url then
-            vim.fn.setreg('+', issue.url)
-            vim.fn.setreg('*', issue.url)
-            vim.fn.setreg('"', issue.url)
+        local url = issue.url
+        if not url or url == vim.NIL then
+            local identifier = issue.identifier or "unknown"
+            url = "https://linear.app/issue/" .. identifier
+        end
+        
+        if url then
+            vim.fn.setreg('+', url)
+            vim.fn.setreg('*', url)
+            vim.fn.setreg('"', url)
             
             local success = false
             if vim.fn.executable('xclip') == 1 then
-                vim.fn.system('echo ' .. vim.fn.shellescape(issue.url) .. ' | xclip -selection clipboard')
+                vim.fn.system('echo ' .. vim.fn.shellescape(url) .. ' | xclip -selection clipboard')
                 success = true
             elseif vim.fn.executable('xsel') == 1 then
-                vim.fn.system('echo ' .. vim.fn.shellescape(issue.url) .. ' | xsel --clipboard --input')
+                vim.fn.system('echo ' .. vim.fn.shellescape(url) .. ' | xsel --clipboard --input')
                 success = true
             elseif vim.fn.executable('wl-copy') == 1 then
-                vim.fn.system('wl-copy ' .. vim.fn.shellescape(issue.url))
+                vim.fn.system('wl-copy ' .. vim.fn.shellescape(url))
                 success = true
             end
             
-            vim.notify("Copied to clipboard: " .. issue.url, vim.log.levels.INFO)
+            vim.notify("Copied to clipboard: " .. url, vim.log.levels.INFO)
         else
             vim.notify("No URL found for this issue", vim.log.levels.WARN)
         end
