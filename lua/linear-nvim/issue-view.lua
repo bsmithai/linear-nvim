@@ -421,6 +421,10 @@ function M.show_issue_in_buffer(issue, options)
     local function copy_link()
         if issue.url then
             vim.fn.setreg('+', issue.url)
+            vim.fn.setreg('*', issue.url)
+            pcall(vim.fn.system, {'xclip', '-selection', 'clipboard'}, issue.url)
+            pcall(vim.fn.system, {'xsel', '--clipboard', '--input'}, issue.url)
+            pcall(vim.fn.system, {'wl-copy'}, issue.url)
             vim.notify("Copied: " .. issue.url, vim.log.levels.INFO)
         end
     end
