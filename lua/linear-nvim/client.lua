@@ -372,7 +372,7 @@ end
 function LinearClient:get_issue_details(issue_id)
     local issue_fields_query = table.concat(self._issue_fields, " ")
     local query = string.format(
-        '{"query":"query { issue(id: \\"%s\\") { id %s state { id name } assignee { id name } labels { nodes { id name color }} project { id name } }}"}',
+        '{"query":"query { issue(id: \\"%s\\") { id identifier %s state { id name } assignee { id name } labels { nodes { id name color }} project { id name } }}"}',
         issue_id,
         issue_fields_query
     )
