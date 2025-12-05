@@ -419,33 +419,32 @@ function M.show_issue_in_buffer(issue, options)
     end
     
     local function copy_link()
+        local log = require("plenary.log")
+        log.debug("Issue object in copy_link: " .. vim.inspect(issue))
+        
         local url = issue.url
         if not url or url == vim.NIL then
-            local identifier = issue.identifier or "unknown"
+            local identifier = issue.identifier
+            if not identifier or identifier == vim.NIL then
+                vim.notify("No URL or identifier found. Keys: " .. vim.inspect(vim.tbl_keys(issue)), vim.log.levels.ERROR)
+                return
+            end
             url = "https://linear.app/issue/" .. identifier
         end
         
-        if url then
-            vim.fn.setreg('+', url)
-            vim.fn.setreg('*', url)
-            vim.fn.setreg('"', url)
-            
-            local success = false
-            if vim.fn.executable('xclip') == 1 then
-                vim.fn.system('echo ' .. vim.fn.shellescape(url) .. ' | xclip -selection clipboard')
-                success = true
-            elseif vim.fn.executable('xsel') == 1 then
-                vim.fn.system('echo ' .. vim.fn.shellescape(url) .. ' | xsel --clipboard --input')
-                success = true
-            elseif vim.fn.executable('wl-copy') == 1 then
-                vim.fn.system('wl-copy ' .. vim.fn.shellescape(url))
-                success = true
-            end
-            
-            vim.notify("Copied to clipboard: " .. url, vim.log.levels.INFO)
-        else
-            vim.notify("No URL found for this issue", vim.log.levels.WARN)
+        vim.fn.setreg('+', url)
+        vim.fn.setreg('*', url)
+        vim.fn.setreg('"', url)
+        
+        if vim.fn.executable('xclip') == 1 then
+            vim.fn.system('echo ' .. vim.fn.shellescape(url) .. ' | xclip -selection clipboard')
+        elseif vim.fn.executable('xsel') == 1 then
+            vim.fn.system('echo ' .. vim.fn.shellescape(url) .. ' | xsel --clipboard --input')
+        elseif vim.fn.executable('wl-copy') == 1 then
+            vim.fn.system('wl-copy ' .. vim.fn.shellescape(url))
         end
+        
+        vim.notify("Copied: " .. url, vim.log.levels.INFO)
     end
     
     local function setup_markdown_ui(buf)
