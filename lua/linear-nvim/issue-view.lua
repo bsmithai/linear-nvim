@@ -120,7 +120,7 @@ function M.show_issue_in_buffer(issue, options)
     
     table.insert(lines, "")
     table.insert(lines, "")
-    table.insert(lines, "  Press 'q' to close | 'o' to open in browser | 'e' to edit description")
+    table.insert(lines, "  Press 'q' to close | 'o' to copy link | 'e' to edit description")
     table.insert(highlights, {line = #lines - 1, col_start = 2, col_end = #lines[#lines], hl_group = "Comment"})
     
     vim.api.nvim_buf_set_lines(buf, 0, -1, false, lines)
@@ -415,6 +415,13 @@ function M.show_issue_in_buffer(issue, options)
             local utils = require("linear-nvim.utils")
             utils.open_in_browser_raw(issue.url)
             close_window()
+        end
+    end
+    
+    local function copy_link()
+        if issue.url then
+            vim.fn.setreg('+', issue.url)
+            vim.notify("Copied: " .. issue.url, vim.log.levels.INFO)
         end
     end
     
@@ -721,7 +728,7 @@ function M.show_issue_in_buffer(issue, options)
     
     vim.keymap.set('n', 'q', close_window, { buffer = buf, silent = true })
     vim.keymap.set('n', '<Esc>', close_window, { buffer = buf, silent = true })
-    vim.keymap.set('n', 'o', open_in_browser, { buffer = buf, silent = true })
+    vim.keymap.set('n', 'o', copy_link, { buffer = buf, silent = true })
     vim.keymap.set('n', 'e', edit_description, { buffer = buf, silent = true })
     vim.keymap.set('n', 'l', edit_labels, { buffer = buf, silent = true })
 end
