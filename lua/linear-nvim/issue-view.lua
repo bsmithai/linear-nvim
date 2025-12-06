@@ -751,7 +751,7 @@ function M.show_issue_in_buffer(issue, options)
     vim.keymap.set('n', 'q', close_window, { buffer = buf, silent = true })
     vim.keymap.set('n', '<Esc>', close_window, { buffer = buf, silent = true })
     vim.keymap.set('n', 'o', copy_link, { buffer = buf, silent = true })
-    vim.keymap.set('n', 'e', edit_description, { buffer = buf, silent = true })
+    vim.keymap.set('n', 'i', edit_description, { buffer = buf, silent = true })
     vim.keymap.set('n', 'l', edit_labels, { buffer = buf, silent = true })
 end
 
